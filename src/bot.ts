@@ -1,9 +1,11 @@
 import { createBot, LOG_LEVELS } from "bonkbot";
 
+require("dotenv").config();
+
 const bot = createBot({
   account: {
     username: "FUTHERO BOT",
-    password: "$futheroroomsbot025",
+    password: process.env.BOT_PASSWORD,
     guest: false,
   },
   PROTOCOL_VERSION: 49,
