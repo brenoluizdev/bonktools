@@ -1,5 +1,4 @@
 import { createBot, LOG_LEVELS } from "bonkbot";
-
 require("dotenv").config();
 
 const bot = createBot({
@@ -10,7 +9,7 @@ const bot = createBot({
   },
   PROTOCOL_VERSION: 49,
   server: "b2brazil1",
-  logLevel: LOG_LEVELS.DEBUG,
+  logLevel: LOG_LEVELS.WARN,
 });
 
 export default bot;

@@ -14,5 +14,5 @@ for (const file of readdirSync(commandsPath)) {
 export function runCommand(bot: any, name: string, args: string[], message: any) {
   const command = commands.get(name);
   if (!command) return;
-  command.execute(bot, args, message);
+  command.execute(bot, name, args, message);
 }

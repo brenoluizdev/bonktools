@@ -1,13 +1,11 @@
 import bot from "../bot";
 
 export default function packetEvent(botInstance: typeof bot) {
-  botInstance.events.on("PACKET", (packet: any) => {
-    botInstance.autoHandlePacket(packet);
-    
+  botInstance.events.on("PACKET", async (packet: any) => {
     if (packet.type === "TIMESYNC" || packet.type === "PLAYER_PINGS") {
-			return;
-		}
-
-		console.log("Received packet:", packet);
+      return;
+    }
+    
+    botInstance.autoHandlePacket(packet);
   });
 }
