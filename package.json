@@ -26,5 +26,9 @@
   "devDependencies": {
     "typescript": "^5.3.3",
     "nodemon": "^3.0.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/@brenoluizdev"
   }
+
 }
