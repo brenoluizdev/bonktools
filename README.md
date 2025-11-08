@@ -10,7 +10,7 @@ A powerful **Node.js + TypeScript** library to create **automated bots for [Bonk
 ✅ Supports chat, players, teams, and game state  
 ✅ Fully typed with **TypeScript**  
 ✅ Clean, modular structure  
-✅ Detailed debug logs (`[DEBUG] [BonkBot] ...`)
+✅ Detailed debug logs (`[DEBUG] [BONKTOOLS] ...`)
 
 ---
 
