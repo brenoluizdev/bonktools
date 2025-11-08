@@ -1,0 +1,30 @@
+{
+  "name": "bonktools",
+  "version": "1.0.0",
+  "description": "Uma biblioteca Node.js para criar bots do jogo Bonk.io com suporte a eventos, sockets e tipagem TypeScript.",
+  "main": "dist/index.js",
+  "types": "dist/types/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "nodemon src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brenoluizdev/bonktools.git"
+  },
+  "keywords": [
+    "bonk.io",
+    "bot",
+    "game",
+    "typescript",
+    "websocket",
+    "automation"
+  ],
+  "author": "brenoluizdev",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "nodemon": "^3.0.2"
+  }
+}
