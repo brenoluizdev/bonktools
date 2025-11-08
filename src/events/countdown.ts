@@ -3,6 +3,6 @@ import { JoinTeam } from "../types/joinTeam.types";
 
 export default function countdownEvent(botInstance: typeof bot) {
     botInstance.events.on("COUNTDOWN", (countdown) => {
-        bot.chat(`${countdown}!`);
+        console.log(countdown)
     });
 }

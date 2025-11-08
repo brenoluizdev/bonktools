@@ -1,4 +1,3 @@
-import { setFootballMode } from "../functions/setFootballMode";
 import { SERVER_MESSAGE_TYPES } from "../types/constants.types";
 import { JoinTeam } from "../types/joinTeam.types";
 
