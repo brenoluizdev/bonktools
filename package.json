@@ -1,12 +1,13 @@
 {
   "name": "bonktools",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "local": "ts-node examples/local-testing.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
@@ -42,7 +43,7 @@
     "axios": "^1.6.0",
     "box2d-wasm": "^6.0.1",
     "eventemitter3": "^5.0.1",
-    "socket.io-client": "^2.5.0"
+    "socket.io-client": "^2.3.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
