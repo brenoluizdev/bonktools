@@ -14,6 +14,13 @@ async function runBot() {
     // 2. Configurar ouvintes de eventos
     bot.on('ready', () => {
         console.log('Bot pronto para conectar.');
+
+        bot.on('ROOM_SHARE_LINK', (data) => {
+            console.log(data);
+            console.log(`Room Link: ${data}`);
+        })
+
+        bot.connect();
     });
 
     bot.on('connect', () => {
@@ -26,7 +33,6 @@ async function runBot() {
             password: '123',
         }).then(() => {
             console.log(`Sala criada! Nome: ${bot.room.name} no servidor ${bot.room.server}`);
-            console.log('Aguardando o pacote ROOM_SHARE_LINK para obter o ID da sala...');
             
             // 5. Enviar uma mensagem de chat após um pequeno atraso
             setTimeout(() => {

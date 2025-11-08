@@ -528,6 +528,10 @@ export class BonkConnection extends EventEmitter {
         }
     }
 
+    getShareLink(){
+		return "https://bonk.io/" + this.room.dbid + this.room.bypass;
+	}
+
     /**
      * Manipula os pacotes recebidos do servidor.
      * @param {any} packet - Pacote analisado.
@@ -542,7 +546,7 @@ export class BonkConnection extends EventEmitter {
                 // O servidor responde com o ID da sala e o bypass após a criação
                 this.room.dbid = packet.data.roomId;
                 this.room.bypass = packet.data.roomBypass;
-                this.emit('ROOM_SHARE_LINK', { roomId: this.room.dbid, bypass: this.room.bypass });
+                this.emit('ROOM_SHARE_LINK', { url: this.getShareLink() });
                 break;
 
             case SERVER_MESSAGE_TYPES.JOIN_ROOM:

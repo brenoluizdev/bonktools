@@ -15,40 +15,6 @@ export * from './utils/constants';
 // Exporta utilitários (opcional)
 export * from './utils/validation';
 
-/**
- * A classe principal da biblioteca BonkTools, que estende BonkConnection.
- * Serve como ponto de entrada para todas as funcionalidades da biblioteca.
- */
-/**
- * A classe principal da biblioteca BonkTools, que estende BonkConnection.
- * Serve como ponto de entrada para todas as funcionalidades da biblioteca.
- *
- * @example
- * \`\`\`typescript
- * import BonkTools from 'bonktools';
- *
- * async function runBot() {
- *     const bot = new BonkTools({ username: 'GuestBot', guest: true });
- *     await bot.init();
- *     await bot.connect();
- *
- *     // Criar uma sala
- *     await bot.createRoom({ roomname: 'Minha Sala BonkTools' });
- *
- *     // Ouvir mensagens de chat
- *     bot.on('CHAT_MESSAGE', ({ player, message }) => {
- *         console.log(\`[\${player.username}]: \${message}\`);
- *         if (message === '!start') {
- *             bot.startGame();
- *         }
- *     });
- *
- *     console.log(\`Sala criada! Nome: \${bot.room.name}\`);
- * }
- *
- * runBot().catch(console.error);
- * \`\`\`
- */
 export class BonkTools extends BonkConnection {
     /**
      * Cria uma nova instância de BonkTools.

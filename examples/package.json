@@ -11,6 +11,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "bonktools": "^2.0.0"
+    "bonktools": "^2.0.1"
   }
 }
