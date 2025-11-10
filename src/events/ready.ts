@@ -7,11 +7,9 @@ export default function readyEvent(botInstance: typeof bot) {
     console.log("✅ Bot is fully ready and connected to Bonk.io servers!");
 
     try {
-      // Aguarda a conexão completa
       await botInstance.connect();
       console.log("🔌 Connection established!");
 
-      // Aguarda alguns segundos antes de criar a sala para garantir estabilidade
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
       const room = await botInstance.createRoom({
