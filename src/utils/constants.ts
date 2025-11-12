@@ -1,5 +1,3 @@
-// Constantes extraídas do bonkbot (utils/constants.js)
-
 export const DEFAULT_SERVER: string = "b2ny1";
 
 export const MESSAGE_TYPES = {
@@ -84,7 +82,6 @@ export const MESSAGE_TYPES = {
     ROOM_PASSWORD_UPDATE: 79,
 };
 
-// Mapeamento de tipos de mensagens do cliente (para envio)
 export const CLIENT_MESSAGE_TYPES = {
     PING_RESPONSE: MESSAGE_TYPES.PING_RESPONSE,
     SEND_INPUTS: MESSAGE_TYPES.SEND_INPUTS,
@@ -129,7 +126,6 @@ export const CLIENT_MESSAGE_TYPES = {
     SEND_CURATE: MESSAGE_TYPES.SEND_CURATE,
 };
 
-// Mapeamento de tipos de mensagens do servidor (para recebimento)
 export const SERVER_MESSAGE_TYPES = {
     PLAYER_PINGS: MESSAGE_TYPES.PLAYER_PINGS,
     ROOM_ADDRESS: MESSAGE_TYPES.ROOM_ADDRESS,
@@ -167,9 +163,9 @@ export const SERVER_MESSAGE_TYPES = {
     CURATE_RESULT: MESSAGE_TYPES.CURATE_RESULT,
     ROOM_NAME_UPDATE: MESSAGE_TYPES.ROOM_NAME_UPDATE,
     ROOM_PASSWORD_UPDATE: MESSAGE_TYPES.ROOM_PASSWORD_UPDATE,
-    JOIN_ROOM: MESSAGE_TYPES.JOIN_ROOM, // Também é um pacote de servidor
-    CHAT_MESSAGE: MESSAGE_TYPES.CHAT_MESSAGE, // Também é um pacote de servidor
-    TIMESYNC: MESSAGE_TYPES.TIMESYNC, // Também é um pacote de servidor
+    JOIN_ROOM: MESSAGE_TYPES.JOIN_ROOM,
+    CHAT_MESSAGE: MESSAGE_TYPES.CHAT_MESSAGE,
+    TIMESYNC: MESSAGE_TYPES.TIMESYNC,
 };
 
 export const API = {
@@ -187,5 +183,3 @@ export const TEAM_NAMES: { [key: number]: string } = {
     4: 'Team 4',
     5: 'Team 5',
 };
-
-// Outras constantes (GAMEMODE_NAMES, ENGINE_NAMES, etc.) podem ser adicionadas conforme necessário.

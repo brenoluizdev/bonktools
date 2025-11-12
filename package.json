@@ -7,6 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "host": "ts-node examples/host-bot.ts",
     "local": "ts-node examples/local-testing.ts",
     "test": "jest",
     "test:watch": "jest --watch",

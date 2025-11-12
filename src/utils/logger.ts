@@ -1,8 +1,3 @@
-/**
- * Logger utility for BonkTools
- * Provides colored console logging with different levels
- */
-
 export enum LogLevel {
   DEBUG = 0,
   INFO = 1,
@@ -20,13 +15,10 @@ export interface Logger {
   getLevel(): LogLevel;
 }
 
-// ANSI color codes for terminal
 const colors = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
   dim: '\x1b[2m',
-  
-  // Foreground colors
   black: '\x1b[30m',
   red: '\x1b[31m',
   green: '\x1b[32m',
@@ -38,9 +30,6 @@ const colors = {
   gray: '\x1b[90m'
 };
 
-/**
- * Format timestamp for logs
- */
 function getTimestamp(): string {
   const now = new Date();
   const hours = String(now.getHours()).padStart(2, '0');
@@ -50,9 +39,6 @@ function getTimestamp(): string {
   return `${hours}:${minutes}:${seconds}.${ms}`;
 }
 
-/**
- * Format log message with color and timestamp
- */
 function formatMessage(
   level: string,
   color: string,
@@ -66,9 +52,6 @@ function formatMessage(
   return `${timestamp} ${levelStr} ${namespaceStr}`;
 }
 
-/**
- * Serialize arguments for logging
- */
 function serializeArgs(args: any[]): string {
   return args.map(arg => {
     if (typeof arg === 'string') {
@@ -88,13 +71,9 @@ function serializeArgs(args: any[]): string {
   }).join(' ');
 }
 
-/**
- * Create a logger instance
- */
 export function createLogger(namespace: string, initialLevel: LogLevel | keyof typeof LogLevel = LogLevel.INFO): Logger {
   let currentLevel: LogLevel;
   
-  // Parse initial level
   if (typeof initialLevel === 'string') {
     currentLevel = LogLevel[initialLevel as keyof typeof LogLevel];
   } else {
@@ -146,12 +125,9 @@ export function createLogger(namespace: string, initialLevel: LogLevel | keyof t
   return logger;
 }
 
-/**
- * Export LogLevel for convenience
- */
-export const LOG_LEVELS = LogLevel;
+export const setLevel = (level: LogLevel | keyof typeof LogLevel) => {
+  defaultLogger.setLevel(level);
+};
 
-/**
- * Default logger instance
- */
+export const LOG_LEVELS = LogLevel;
 export const defaultLogger = createLogger('BonkTools');
