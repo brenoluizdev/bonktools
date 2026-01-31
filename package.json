@@ -8,7 +8,12 @@
     "download-cert": "node scripts/download-cert.js",
     "preinstall": "node scripts/download-cert.js || true",
     "simple-bot": "node examples/simple-bot.js",
-    "host-bot": "node examples/host-bot.js"
+    "host-bot": "node examples/host-bot.js",
+
+    "publish_1": "npm version patch",
+    "publish_2": "npm version minor",
+    "publish_3": "npm version major",
+    "publish_4": "npm publish"
   },
   "keywords": [
     "bonk.io",
