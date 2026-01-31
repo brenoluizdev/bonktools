@@ -1,25 +1,20 @@
 {
   "name": "bonktools",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
-
   "main": "index.js",
-
   "exports": {
     ".": "./index.js"
   },
-
   "files": [
     "index.js",
     "lib",
     "README.md",
     "LICENSE"
   ],
-
   "scripts": {
     "test": "jest"
   },
-
   "keywords": [
     "bonk.io",
     "bot",
@@ -28,26 +23,21 @@
     "physics",
     "box2d"
   ],
-
   "author": "OBL",
   "license": "MIT",
-
   "repository": {
     "type": "git",
     "url": "https://github.com/brenoluizdev/bonktools.git"
   },
-
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
-
   "dependencies": {
     "axios": "^1.6.0",
     "box2d-wasm": "^6.0.1",
     "eventemitter3": "^5.0.1",
     "socket.io-client": "^4.7.2"
   },
-
   "engines": {
     "node": ">=16"
   }
