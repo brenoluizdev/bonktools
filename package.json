@@ -1,6 +1,6 @@
 {
   "name": "bonktools",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
   "main": "src/index.js",
   "files": [
