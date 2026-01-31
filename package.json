@@ -1,6 +1,6 @@
 {
   "name": "bonktools",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
   "main": "src/index.js",
   "scripts": {
@@ -9,7 +9,6 @@
     "preinstall": "node scripts/download-cert.js || true",
     "simple-bot": "node examples/simple-bot.js",
     "host-bot": "node examples/host-bot.js",
-
     "publish_1": "npm version patch",
     "publish_2": "npm version minor",
     "publish_3": "npm version major",
