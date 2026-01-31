@@ -1,8 +1,8 @@
-import { CLIENT_MESSAGE_TYPES } from "bonkbot";
+import { CLIENT_MESSAGE_TYPES } from "bonktools";
 import bot from "../bot";
 import { JoinTeam } from "../types/joinTeam.types";
 
-export default function readyEvent(botInstance: typeof bot) {
+export default function readyEvent(botInstance: typeof bot) { 
   botInstance.events.on("ready", async () => {
     console.log("✅ Bot is fully ready and connected to Bonk.io servers!");
 
