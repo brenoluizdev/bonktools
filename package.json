@@ -2,64 +2,53 @@
   "name": "bonktools",
   "version": "2.1.0",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+
+  "main": "index.js",
+
+  "exports": {
+    ".": "./index.js"
+  },
+
+  "files": [
+    "index.js",
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "host": "ts-node examples/host-bot.ts",
-    "local": "ts-node examples/local-testing.ts",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "lint": "eslint src/**/*.ts",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "prepublishOnly": "npm run build",
-    "example:simple": "ts-node examples/simple-bot.ts",
-    "example:host": "ts-node examples/host-bot.ts"
+    "test": "jest"
   },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
-  },
+
   "keywords": [
     "bonk.io",
     "bot",
     "game",
     "automation",
     "physics",
-    "box2d",
-    "typescript"
+    "box2d"
   ],
+
   "author": "OBL",
   "license": "MIT",
+
   "repository": {
     "type": "git",
     "url": "https://github.com/brenoluizdev/bonktools.git"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
+
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
+
   "dependencies": {
     "axios": "^1.6.0",
     "box2d-wasm": "^6.0.1",
     "eventemitter3": "^5.0.1",
-    "socket.io-client": "^2.3.1"
+    "socket.io-client": "^4.7.2"
   },
-  "devDependencies": {
-    "@types/jest": "^29.5.0",
-    "@types/node": "^20.10.0",
-    "@types/socket.io-client": "^1.4.36",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.50.0",
-    "jest": "^29.7.0",
-    "prettier": "^3.0.0",
-    "ts-jest": "^29.1.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.3.0"
-  },
+
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=16"
   }
 }
