@@ -1,6 +1,6 @@
 {
   "name": "bonktools",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
   "main": "src/index.js",
   "files": [
@@ -9,13 +9,13 @@
     "README.md",
     "LICENSE"
   ],
-	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1",
-		"download-cert": "node scripts/download-cert.js",
-		"preinstall": "node scripts/download-cert.js || true",
-		"simple-bot": "node examples/simple-bot.js",
-		"host-bot": "node examples/host-bot.js"
-	},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "download-cert": "node scripts/download-cert.js",
+    "preinstall": "node scripts/download-cert.js || true",
+    "simple-bot": "node examples/simple-bot.js",
+    "host-bot": "node examples/host-bot.js"
+  },
   "keywords": [
     "bonk.io",
     "bot",
