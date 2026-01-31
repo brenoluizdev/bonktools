@@ -3,12 +3,6 @@
   "version": "2.3.0",
   "description": "Advanced Bonk.io bot library with physics simulation and game state management",
   "main": "src/index.js",
-  "files": [
-    "index.js",
-    "lib",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "download-cert": "node scripts/download-cert.js",
