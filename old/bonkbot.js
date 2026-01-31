@@ -3,7 +3,7 @@
 //  - Version: 3.0.0 by Pix@7008
 //
 
-const WebSocket = require("ws");
+const WebSocket = require("ws");    
 const axios = require("axios");
 const EventEmitter = require("events");
 
