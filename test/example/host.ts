@@ -1,4 +1,4 @@
-import { createBot, LOG_LEVELS } from 'bonkbot';
+import { createBot, LOG_LEVELS } from 'bonktools';
 
 const bot = createBot({
   account: {

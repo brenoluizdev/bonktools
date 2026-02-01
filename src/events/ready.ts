@@ -1,4 +1,4 @@
-import { CLIENT_MESSAGE_TYPES } from "bonkbot";
+import { CLIENT_MESSAGE_TYPES } from "bonktools";
 import bot from "../bot";
 import { JoinTeam } from "../types/joinTeam.types";
 
