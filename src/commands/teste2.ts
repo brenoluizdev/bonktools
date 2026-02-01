@@ -19,7 +19,6 @@ export default {
       bot.setDefaultFootballMap();
     }
     
-    await bot.setFootballMode();
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     console.log("Iniciando jogo com mapa real...");

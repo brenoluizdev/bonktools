@@ -9,7 +9,6 @@ export default {
 
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    await bot.setFootballMode();
     // await bot.setTeamSettings({ teamCount: 2, locked: false });
     await bot.joinTeam(JoinTeam.SPEC);
   },

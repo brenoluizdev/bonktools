@@ -19,8 +19,6 @@ export default function readyEvent(botInstance: typeof bot) {
         hidden: false,
       });
 
-      await botInstance.setFootballMode();
-
       console.log("🟢 Room successfully created!");
 
       setInterval(() => {
