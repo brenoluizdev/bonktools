@@ -26,8 +26,6 @@ const { LOG_LEVELS } = require("./utils/logger");
 // Create logger
 const logger = createLogger('BonkBot');
 
-// Create HTTPS agent for axios with certificate verification disabled
-// NOTE: bonk.io servers use Sectigo certificates with incomplete chains
 const httpsAgent = new https.Agent({
     rejectUnauthorized: false
 });
@@ -1307,25 +1305,6 @@ class BonkBot {
         return true
     }
 
-
-
-
-    /**
-     * 
-     * User callable methods (the bot api)
-     * 
-     */
-
-
-
-
-
-
-
-    /**
-     * Clean up resources
-     * @private
-     */
     stopBot() {
         this.connected = false;
 
@@ -1341,13 +1320,6 @@ class BonkBot {
 	}
 
 
-
-
-
-    /**
-     * Send a chat message
-     * @param {string} message - Message to send
-     */
     async chat(message) {
         this.checkConnection();
         await this.sendMessage(CLIENT_MESSAGE_TYPES.CHAT_MESSAGE, {
