@@ -1,4 +1,4 @@
-const { createBot, LOG_LEVELS } = require("bonktools");
+const { createBot, LOG_LEVELS } = require("bonkbot");
 // const { createBot, LOG_LEVELS } = require("../src/index");
 
 

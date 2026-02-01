@@ -1,4 +1,4 @@
-import { createBot, LOG_LEVELS } from "bonktools";
+import { createBot, LOG_LEVELS } from "bonkbot";
 require("dotenv").config();
 
 const bot = createBot({

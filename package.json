@@ -8,7 +8,7 @@
     "dev": "nodemon src/index.ts"
   },
   "dependencies": {
-    "bonktools": "^2.3.0",
+    "bonkbot": "^4.0.4",
     "chalk": "^5.6.2",
     "dotenv": "^17.2.3",
     "fs": "^0.0.1-security",
