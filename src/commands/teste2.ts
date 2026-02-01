@@ -16,10 +16,8 @@ export default {
     } catch (error: any) {
       console.error("❌ Erro ao carregar mapa:", error.message);
       console.log("Usando mapa padrão como fallback...");
-      bot.setDefaultFootballMap();
     }
     
-    await bot.setFootballMode();
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     console.log("Iniciando jogo com mapa real...");

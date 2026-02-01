@@ -1,4 +1,4 @@
-import { CLIENT_MESSAGE_TYPES } from "bonkbot";
+import { CLIENT_MESSAGE_TYPES } from "bonktools";
 import bot from "../bot";
 import { JoinTeam } from "../types/joinTeam.types";
 
@@ -18,8 +18,6 @@ export default function readyEvent(botInstance: typeof bot) {
         roompassword: "0102030405",
         hidden: false,
       });
-
-      await botInstance.setFootballMode();
 
       console.log("🟢 Room successfully created!");
 
