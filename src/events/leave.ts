@@ -1,10 +1,16 @@
 import bot from "../bot";
-import { JoinTeam } from "../types/joinTeam.types";
+import { MESSAGES } from "../messages";
+import { handlePlayerLeave } from "../state/transitions";
 
 export default function leaveEvent(botInstance: typeof bot) {
-  botInstance.events.on("PLAYER_LEAVE", (player: any) => {
-    player = player.player;
+  botInstance.events.on("PLAYER_LEAVE", (playerData: any) => {
+    const player = playerData.player;
     
-    botInstance.chat(`👋 ${player.username} saiu da sala.`);
+    botInstance.chat(MESSAGES.PLAYER_LEFT(player.username));
+    
+    // Processar saída do jogador
+    if (player.id !== 0) {
+      handlePlayerLeave(botInstance, player.id);
+    }
   });
 }
