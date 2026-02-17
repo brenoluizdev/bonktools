@@ -1,30 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SERVER_MESSAGE_TYPES = exports.CLIENT_MESSAGE_TYPES_NUM = exports.MBAPPA_COMMANDS = exports.DEFAULT_LZ_MAP = exports.INVESTIGATION_TRIGGER_START = exports.SUBSTITUTION_TIMEOUT_MS = void 0;
+exports.SERVER_MESSAGE_TYPES = exports.CLIENT_MESSAGE_TYPES_NUM = exports.INVESTIGATION_TRIGGER_START = exports.SUBSTITUTION_TIMEOUT_MS = void 0;
 /** Timeout para resposta do espectador na substituição (ms). API Bonk / Mbappa. */
 exports.SUBSTITUTION_TIMEOUT_MS = 15000;
 /** Ativar logs detalhados de investigação para Trigger Start / GAME_START. Ver docs/investigation/TRIGGER_START_GAME_START.md */
 exports.INVESTIGATION_TRIGGER_START = process.env.INVESTIGATION === "1";
-/**
- * Mapa LZ padrão para Trigger Start quando a sala não tem room.map como string.
- * Use !getmapmbappa quando você for host e o mapa estiver em LZ para copiar o valor.
- */
-exports.DEFAULT_LZ_MAP = "ILAcJAhBFBjBzCTlMiANgMQEYA1IAMApgMqQByAmrlAQFIBu2AtgC4DC2AzNCimsABaARgCGAdQCsBALIAvAJJIAMqwAOBAREQy+epAF4gA";
-/** Nomes dos comandos Mbappa (prefixo !). */
-exports.MBAPPA_COMMANDS = {
-    META: "metambappa",
-    MODO: "modombappa",
-    TEAMS: "teamsmbappa",
-    GOALS: "goalsmbappa",
-    GOL: "gol",
-    PLACAR: "placar",
-    START: "startmbappa",
-    START_TEST: "starttest",
-    START_INVESTIGATE: "startinvestigate",
-    GET_MAP: "getmapmbappa",
-    XRAY: "xraymbappa",
-    PLAYERS: "playersmbappa",
-};
 /** API Bonk - tipos de mensagem cliente (outgoing). Payload conforme doc: 42[type, payload]. */
 exports.CLIENT_MESSAGE_TYPES_NUM = {
     KICK_BAN_PLAYER: 9,

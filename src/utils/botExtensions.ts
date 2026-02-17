@@ -1,14 +1,14 @@
 /**
- * Extensões do bot para funcionalidades não expostas pelo bonktools
+ * Bot extensions for features not exposed directly by bonktools.
  */
 
 import { CLIENT_MESSAGE_TYPES_NUM } from "../types/constants.types";
 
 /**
- * Muda o time de outro jogador (requer host)
- * @param bot - Instância do bot
- * @param playerId - ID do jogador
- * @param team - Time de destino (0=spec, 1=FFA, 2=red, 3=blue)
+ * Changes another player's team (requires host).
+ * @param bot - Bot instance
+ * @param playerId - Player ID
+ * @param team - Target team (0=spec, 1=FFA, 2=red, 3=blue)
  */
 export async function changeOtherTeam(
   bot: any,
@@ -17,7 +17,7 @@ export async function changeOtherTeam(
 ): Promise<boolean> {
   try {
     if (typeof bot.sendMessage !== "function") {
-      console.error("[BotExt] sendMessage não disponível");
+      console.error("[BotExt] sendMessage is not available");
       return false;
     }
 
@@ -26,30 +26,30 @@ export async function changeOtherTeam(
       targetTeam: team,
     });
 
-    console.log(`[BotExt] Time de player ${playerId} alterado para ${team}`);
+    console.log(`[BotExt] Player ${playerId} team changed to ${team}`);
     return true;
   } catch (error) {
-    console.error(`[BotExt] Erro ao mudar time:`, error);
+    console.error(`[BotExt] Error while changing team:`, error);
     return false;
   }
 }
 
 /**
- * Inicia o jogo como host (envia ready + countdown)
- * @param bot - Instância do bot
+ * Starts the game as host (sends ready + countdown).
+ * @param bot - Bot instance
  */
 export async function startGameAsHost(bot: any): Promise<boolean> {
   try {
-    // 1. Host marca-se como pronto
+    // 1. Host marks itself as ready
     if (typeof bot.ready === "function") {
       await bot.ready(true);
       await new Promise((r) => setTimeout(r, 150));
     }
 
-    // 2. Enviar countdown de 1 segundo
+    // 2. Send 1-second countdown
     if (typeof bot.sendMessage === "function") {
       await bot.sendMessage(CLIENT_MESSAGE_TYPES_NUM.SEND_START_COUNTDOWN, 1);
-      console.log("[BotExt] startGame: ready + countdown(1) enviados");
+      console.log("[BotExt] startGame: ready + countdown(1) sent");
       return true;
     }
 
@@ -61,8 +61,8 @@ export async function startGameAsHost(bot: any): Promise<boolean> {
 }
 
 /**
- * Reseta o ready de todos os jogadores
- * @param bot - Instância do bot
+ * Resets ready status for all players.
+ * @param bot - Bot instance
  */
 export async function allReadyReset(bot: any): Promise<boolean> {
   try {
@@ -71,10 +71,10 @@ export async function allReadyReset(bot: any): Promise<boolean> {
     }
 
     await bot.sendMessage(CLIENT_MESSAGE_TYPES_NUM.ALL_READY_RESET, {});
-    console.log("[BotExt] allReadyReset enviado");
+    console.log("[BotExt] allReadyReset sent");
     return true;
   } catch (error) {
-    console.error("[BotExt] Erro ao resetar ready:", error);
+    console.error("[BotExt] Error while resetting ready:", error);
     return false;
   }
 }

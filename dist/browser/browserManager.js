@@ -6,9 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.browserManager = exports.BrowserManager = void 0;
 const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
 /**
- * Gerenciador de navegador para manter uma instância do Bonk.io aberta.
- * O Bonk.io requer um navegador real aberto para certas ações (GAME_START, CHANGE_OTHER_TEAM)
- * funcionarem corretamente por questões de segurança interna.
+ * Browser manager to keep a Bonk.io instance open.
+ * Bonk.io requires a real browser window for some actions (GAME_START, CHANGE_OTHER_TEAM)
+ * to work correctly due to internal security rules.
  */
 class BrowserManager {
     constructor() {
@@ -17,13 +17,13 @@ class BrowserManager {
         this.roomUrl = null;
     }
     /**
-     * Inicia o navegador e navega para a sala do bot
-     * IMPORTANTE: O navegador NÃO faz login, apenas abre a URL da sala.
-     * O bot (bonktools) já está conectado via WebSocket na mesma conta.
-     * O navegador serve apenas para manter a "presença" necessária para game start.
+     * Starts the browser and navigates to the bot room.
+     * IMPORTANT: The browser does NOT log in, it only opens the room URL.
+     * The bot (bonktools) is already connected via WebSocket on the same account.
+     * The browser is only used to keep the required presence for game start.
      *
-     * @param roomUrl - URL da sala (https://bonk.io/...)
-     * @param options - Opções de configuração
+     * @param roomUrl - Room URL (https://bonk.io/...)
+     * @param options - Configuration options
      */
     async launch(roomUrl, options = {}) {
         try {
@@ -31,10 +31,10 @@ class BrowserManager {
             const headless = options.headless ?? process.env.BROWSER_HEADLESS === "true";
             const envPath = process.env.CHROME_PATH?.trim();
             const executablePath = (options.executablePath?.trim() || envPath) || this.getDefaultChromePath();
-            console.log("[Browser] Iniciando navegador...");
+            console.log("[Browser] Starting browser...");
             console.log(`[Browser] Path: ${executablePath}`);
             console.log(`[Browser] Headless: ${headless}`);
-            console.log("[Browser] NOTA: Navegador não fará login - apenas abre a sala como visitante");
+            console.log("[Browser] NOTE: Browser will not log in - it only opens the room as a visitor");
             this.browser = await puppeteer_core_1.default.launch({
                 executablePath,
                 headless,
@@ -52,51 +52,51 @@ class BrowserManager {
                 },
             });
             this.page = await this.browser.newPage();
-            // Configurar user agent para parecer mais natural
+            // Configure user agent to look more natural
             await this.page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-            console.log(`[Browser] Navegando para: ${roomUrl}`);
-            // Navegar diretamente para a sala (SEM fazer login)
+            console.log(`[Browser] Navigating to: ${roomUrl}`);
+            // Navigate directly to the room (WITHOUT logging in)
             await this.page.goto(roomUrl, {
                 waitUntil: "domcontentloaded",
                 timeout: 30000,
             });
-            // Aguardar o iframe do jogo carregar
+            // Wait for the game iframe to load
             try {
                 await this.page.waitForSelector("#maingameframe", { timeout: 10000 });
-                console.log("[Browser] ✅ Navegador conectado à sala!");
-                console.log("[Browser] O navegador está apenas observando (não fez login)");
-                console.log("[Browser] O bot (bonktools) controla tudo via WebSocket");
-                console.log("[Browser] ⚠️  MANTENHA ESTE NAVEGADOR ABERTO para game start funcionar!");
+                console.log("[Browser] ✅ Browser connected to room!");
+                console.log("[Browser] Browser is only observing (not logged in)");
+                console.log("[Browser] Bot (bonktools) controls everything via WebSocket");
+                console.log("[Browser] ⚠️  KEEP THIS BROWSER OPEN for game start to work!");
             }
             catch (error) {
-                console.warn("[Browser] ⚠️  Iframe do jogo não carregou, mas continuando...");
+                console.warn("[Browser] ⚠️  Game iframe did not load, continuing anyway...");
             }
         }
         catch (error) {
-            console.error("[Browser] ❌ Erro ao iniciar navegador:", error);
+            console.error("[Browser] ❌ Error while starting browser:", error);
             throw error;
         }
     }
     /**
-     * Fecha o navegador
+     * Closes the browser
      */
     async close() {
         if (this.browser) {
-            console.log("[Browser] Fechando navegador...");
+            console.log("[Browser] Closing browser...");
             await this.browser.close();
             this.browser = null;
             this.page = null;
-            console.log("[Browser] Navegador fechado.");
+            console.log("[Browser] Browser closed.");
         }
     }
     /**
-     * Verifica se o navegador está ativo
+     * Checks if the browser is active
      */
     isActive() {
         return this.browser !== null && this.browser.connected;
     }
     /**
-     * Retorna o caminho padrão do Chrome para diferentes sistemas operacionais
+     * Returns the default Chrome path for each OS
      */
     getDefaultChromePath() {
         const platform = process.platform;
@@ -108,21 +108,21 @@ class BrowserManager {
             case "linux":
                 return "/usr/bin/google-chrome";
             default:
-                throw new Error(`[Browser] Sistema operacional não suportado: ${platform}`);
+                throw new Error(`[Browser] Unsupported operating system: ${platform}`);
         }
     }
     /**
-     * Retorna a URL da sala
+     * Returns the current room URL
      */
     getRoomUrl() {
         return this.roomUrl;
     }
     /**
-     * Executa JavaScript na página do navegador (para debugging)
+     * Executes JavaScript in the browser page (for debugging)
      */
     async evaluate(script) {
         if (!this.page) {
-            console.warn("[Browser] Navegador não está ativo.");
+            console.warn("[Browser] Browser is not active.");
             return null;
         }
         try {
@@ -130,27 +130,27 @@ class BrowserManager {
             return result;
         }
         catch (error) {
-            console.error("[Browser] Erro ao executar script:", error);
+            console.error("[Browser] Error while executing script:", error);
             return null;
         }
     }
     /**
-     * Tira screenshot da página (para debugging)
+     * Takes a screenshot of the page (for debugging)
      */
     async screenshot(path) {
         if (!this.page) {
-            console.warn("[Browser] Navegador não está ativo.");
+            console.warn("[Browser] Browser is not active.");
             return;
         }
         try {
             await this.page.screenshot({ path, fullPage: false });
-            console.log(`[Browser] Screenshot salvo em: ${path}`);
+            console.log(`[Browser] Screenshot saved to: ${path}`);
         }
         catch (error) {
-            console.error("[Browser] Erro ao tirar screenshot:", error);
+            console.error("[Browser] Error while taking screenshot:", error);
         }
     }
 }
 exports.BrowserManager = BrowserManager;
-// Instância singleton
+// Singleton instance
 exports.browserManager = new BrowserManager();

@@ -12,7 +12,10 @@ exports.investigationRunActive = false;
 function setInvestigationRunActive(value) {
     exports.investigationRunActive = value;
 }
-// Registra payload de GAME_START recebido (para comparação host vs bot).
+/**
+ * Registra payload de GAME_START recebido (para comparação host vs bot).
+ * Chamado por packet.ts quando INVESTIGATION_TRIGGER_START ou investigationRunActive.
+ */
 function logGameStartReceived(payload) {
     console.log("[Investigation] GAME_START payload:", JSON.stringify(payload, null, 2));
 }

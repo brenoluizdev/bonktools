@@ -1,33 +1,28 @@
 {
-  "name": "futhero_bonkio_rooms",
-  "version": "1.0.0",
+  "name": "@futhero/bonk-rooms",
+  "version": "0.1.0",
   "type": "commonjs",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "require": "./dist/lib/index.js"
+    }
+  },
+  "files": [
+    "dist/**",
+    "dependencies/**"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "nodemon src/index.ts",
-    "dev:new": "nodemon src/index-new.ts",
-    "dev:new:headless": "HEADLESS=1 nodemon src/index-new.ts",
-    "dev:mbappa2x2": "MODE=mbappa2x2 nodemon src/index-new.ts",
-    "dev:mbappa2x2:headless": "MODE=mbappa2x2 HEADLESS=1 nodemon src/index-new.ts",
-    "dev:mode": "nodemon src/index-new.ts",
-    "dev:mbappa1x1": "MODE=mbappa1x1 nodemon src/index-new.ts",
-    "dev:classic1x1": "MODE=classic1x1 nodemon src/index-new.ts",
-    "dev:grapple1x1": "MODE=grapple1x1 nodemon src/index-new.ts",
-    "dev:deatharrow1x1": "MODE=deatharrow1x1 nodemon src/index-new.ts",
-    "dev:blclassic": "MODE=blclassic nodemon src/index-new.ts",
-    "dev:volei1x1": "MODE=volei1x1 nodemon src/index-new.ts",
-    "dev:barkball": "MODE=barkball nodemon src/index-new.ts",
-    "dev:blbasketball": "MODE=blbasketball nodemon src/index-new.ts",
-    "dev:blvolleyball": "MODE=blvolleyball nodemon src/index-new.ts",
-    "dev:corridacart": "MODE=corridacart nodemon src/index-new.ts",
     "test:payload": "node --test --require ts-node/register test/investigation/triggerStartPayload.test.ts",
     "investigate:compare": "node --require ts-node/register scripts/investigate-compare-payloads.ts",
     "test:browser": "ts-node scripts/test-browser-start.ts",
     "test:browser:headless": "HEADLESS=1 ts-node scripts/test-browser-start.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0",
     "bonktools": "^3.2.0",
     "chalk": "^5.6.2",
     "dotenv": "^17.2.3",
@@ -46,7 +41,6 @@
     "socket.io-client": "^2.5.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.11",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   }

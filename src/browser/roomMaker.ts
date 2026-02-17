@@ -42,7 +42,7 @@ export class RoomMaker {
         'utf-8'
       );
 
-      console.log('[RoomMaker] ✅ Scripts carregados');
+      console.log('[RoomMaker] ✅ Scripts loaded');
     } catch (error) {
       console.error('[RoomMaker] ❌ Erro ao carregar scripts:');
       console.error('Certifique-se de que os arquivos estão em dependencies/');
@@ -62,13 +62,13 @@ export class RoomMaker {
   }
 
   private async createRoomWithPuppeteer(params: RoomParameters): Promise<RoomCreationResult> {
-    console.log('[RoomMaker] 🚀 Iniciando criação da sala (Chromium)...');
+    console.log('[RoomMaker] 🚀 Starting room creation (Chromium)...');
 
     if (this.lastRoomTime) {
       const elapsed = Date.now() - this.lastRoomTime;
       const waitTime = 5000 - elapsed;
       if (waitTime > 0) {
-        console.log(`[RoomMaker] ⏳ Aguardando ${waitTime}ms (rate limit)...`);
+      console.log(`[RoomMaker] ⏳ Waiting ${waitTime}ms (rate limit)...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
@@ -78,54 +78,55 @@ export class RoomMaker {
     page.setDefaultTimeout(30000);
 
     try {
-      console.log('[RoomMaker] 📜 Registrando scripts (evaluateOnNewDocument)...');
+      console.log('[RoomMaker] 📜 Registering scripts (evaluateOnNewDocument)...');
       const injectorWithHeadCheck =
         '(function run(){ if(!document.head){ setTimeout(run,10); return; }\n' + this.injectorScript + '\n})();';
       await page.evaluateOnNewDocument(injectorWithHeadCheck);
       await page.evaluateOnNewDocument(this.sgrApiScript);
 
-      console.log('[RoomMaker] 🌐 Navegando para Bonk.io...');
+      console.log('[RoomMaker] 🌐 Navigating to Bonk.io...');
       page.goto('https://bonk.io/', { waitUntil: 'domcontentloaded' }).catch(() => {});
 
-      console.log('[RoomMaker] 🎮 Entrando no frame do jogo...');
+      console.log('[RoomMaker] 🎮 Entering game frame...');
       const frameHandle = await page.waitForSelector('#maingameframe', { timeout: 10000 });
       const frame = await frameHandle!.contentFrame();
-      if (!frame) throw new Error('Frame do jogo não encontrado');
+      if (!frame) throw new Error('Game frame not found');
 
       await this.login(frame);
       await this.createGameRoom(frame, params);
       const roomLink = await this.getRoomLink(frame);
       await this.configureRoom(page as any, frame, params);
 
-      console.log(`[RoomMaker] ✅ Sala criada com sucesso: ${roomLink}`);
+      console.log(`[RoomMaker] ✅ Room created successfully: ${roomLink}`);
       this.lastRoomTime = Date.now();
       return { browser, page, roomLink, maps: params.maps };
     } catch (error) {
-      console.error('[RoomMaker] ❌ Erro ao criar sala:', error);
+      console.error('[RoomMaker] ❌ Error while creating room:', error);
       await browser.close();
       throw error;
     }
   }
 
   private async createRoomWithPlaywright(params: RoomParameters): Promise<RoomCreationResult> {
-    console.log('[RoomMaker] 🚀 Iniciando criação da sala (Firefox)...');
+    console.log('[RoomMaker] 🚀 Starting room creation (Firefox)...');
 
     if (this.lastRoomTime) {
       const elapsed = Date.now() - this.lastRoomTime;
       const waitTime = 5000 - elapsed;
       if (waitTime > 0) {
-        console.log(`[RoomMaker] ⏳ Aguardando ${waitTime}ms (rate limit)...`);
+        console.log(`[RoomMaker] ⏳ Waiting ${waitTime}ms (rate limit)...`);
         await new Promise(resolve => setTimeout(resolve, waitTime));
       }
     }
 
     const { firefox } = await import('playwright');
-    const headless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
+    const headless = true;
+
     const browser = await firefox.launch({
       headless,
       args: ['--window-size=1920,1080'],
     });
-    // User-Agent de Chrome para evitar carregamento infinito no Bonk.io (o jogo pode falhar em Firefox puro)
+    // Chrome User-Agent to avoid infinite loading in Bonk.io (Firefox-only can fail)
     const chromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     const context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
@@ -136,40 +137,40 @@ export class RoomMaker {
     page.setDefaultTimeout(30000);
 
     try {
-      console.log('[RoomMaker] 📜 Registrando scripts (addInitScript)...');
+      console.log('[RoomMaker] 📜 Registering scripts (addInitScript)...');
       const injectorWithHeadCheck =
         '(function run(){ if(!document.head){ setTimeout(run,10); return; }\n' + this.injectorScript + '\n})();';
       await page.addInitScript({ content: injectorWithHeadCheck });
       await page.addInitScript({ content: this.sgrApiScript });
 
-      console.log('[RoomMaker] 🌐 Navegando para Bonk.io...');
+      console.log('[RoomMaker] 🌐 Navigating to Bonk.io...');
       await page.goto('https://bonk.io/', { waitUntil: 'load', timeout: 60000 }).catch(() => {});
 
-      console.log('[RoomMaker] 🎮 Entrando no frame do jogo...');
+      console.log('[RoomMaker] 🎮 Entering game frame...');
       await page.waitForSelector('#maingameframe', { timeout: 10000 });
       const frameEl = await page.$('#maingameframe');
-      if (!frameEl) throw new Error('Elemento #maingameframe não encontrado');
+      if (!frameEl) throw new Error('Element #maingameframe not found');
       const frame = await frameEl.contentFrame();
       await frameEl.dispose();
-      if (!frame) throw new Error('Frame do jogo não encontrado');
+      if (!frame) throw new Error('Game frame not found');
 
       await this.login(frame);
       await this.createGameRoom(frame, params);
       const roomLink = await this.getRoomLink(frame);
       await this.configureRoom(page as any, frame, params);
 
-      console.log(`[RoomMaker] ✅ Sala criada com sucesso: ${roomLink}`);
+      console.log(`[RoomMaker] ✅ Room created successfully: ${roomLink}`);
       this.lastRoomTime = Date.now();
       return { browser: browser as any, page: page as any, roomLink, maps: params.maps };
     } catch (error) {
-      console.error('[RoomMaker] ❌ Erro ao criar sala:', error);
+      console.error('[RoomMaker] ❌ Error while creating room:', error);
       await browser.close();
       throw error;
     }
   }
 
   private async launchBrowser(): Promise<Browser> {
-    const headless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
+    const headless = true;
     
     console.log(`[RoomMaker] 🌐 Abrindo navegador (headless: ${headless})...`);
 
@@ -216,13 +217,13 @@ export class RoomMaker {
   }
 
   private async login(frame: any): Promise<void> {
-    console.log('[RoomMaker] 🔐 Fazendo login...');
+    console.log('[RoomMaker] 🔐 Logging in...');
 
     const username = process.env.BOT_USERNAME || 'FUTHERO BOT';
     const password = process.env.BOT_PASSWORD;
 
     if (!password) {
-      throw new Error('BOT_PASSWORD não definido no .env');
+      throw new Error('BOT_PASSWORD is not defined in .env');
     }
 
     await frame.waitForSelector('#guestOrAccountContainer_accountButton', { timeout: 10000 });
@@ -253,21 +254,21 @@ export class RoomMaker {
     }
 
     if (!loggedIn) {
-      throw new Error('Login falhou - verifique BOT_USERNAME e BOT_PASSWORD no .env');
+      throw new Error('Login failed - check BOT_USERNAME and BOT_PASSWORD in .env');
     }
 
     try {
       await frame.waitForSelector('#pretty_top_volume_music', { timeout: 3000 });
       await this.retry(() => this.safeClick(frame, '#pretty_top_volume_music', 250));
     } catch {
-      console.log('[RoomMaker] Botão de música não encontrado (ignorado, seguindo...)');
+      console.log('[RoomMaker] Music button not found (ignored, continuing...)');
     }
 
-    console.log('[RoomMaker] ✅ Login realizado');
+    console.log('[RoomMaker] ✅ Login successful');
   }
 
   private async createGameRoom(frame: any, params: RoomParameters): Promise<void> {
-    console.log('[RoomMaker] 🏗️  Criando sala...');
+    console.log('[RoomMaker] 🏗️  Creating room...');
 
     await frame.waitForSelector('#classic_mid_customgame', { timeout: 5000 });
     await this.retry(() => this.safeClick(frame, '#classic_mid_customgame', 250));
@@ -323,11 +324,11 @@ export class RoomMaker {
       throw new Error('Room creation timeout.');
     }
 
-    console.log('[RoomMaker] ✅ Sala criada no lobby');
+    console.log('[RoomMaker] ✅ Room created in lobby');
   }
 
   private async getRoomLink(frame: any): Promise<string> {
-    console.log('[RoomMaker] 🔗 Obtendo link da sala...');
+    console.log('[RoomMaker] 🔗 Getting room link...');
 
     await frame.waitForSelector('#newbonklobby_linkbutton', { timeout: 5000 });
     await this.retry(() => this.safeClick(frame, '#newbonklobby_linkbutton', 250));
@@ -353,7 +354,7 @@ export class RoomMaker {
   }
 
   private async configureRoom(page: Page, frame: any, params: RoomParameters): Promise<void> {
-    console.log('[RoomMaker] ⚙️  Configurando sala...');
+    console.log('[RoomMaker] ⚙️  Configuring room...');
     const debugLog = process.env.BONK_DEBUG === '1' || process.env.BONK_DEBUG === 'true';
 
     const maxWaitMs = 6000;
@@ -368,9 +369,9 @@ export class RoomMaker {
       await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     }
     if (!hasEngine) {
-      console.warn('[RoomMaker] ⚠️ networkEngine não apareceu após ' + maxWaitMs + 'ms. Chat e lock podem não funcionar.');
+      console.warn('[RoomMaker] ⚠️ networkEngine did not appear after ' + maxWaitMs + 'ms. Chat and lock might not work.');
     } else if (debugLog) {
-      console.log('[RoomMaker:LOG] networkEngine disponível após espera');
+      console.log('[RoomMaker:LOG] networkEngine available after wait');
     }
 
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -403,11 +404,11 @@ export class RoomMaker {
       }
       if (configResult) {
         const r = configResult as any;
-        if (!r.ok) console.warn('[RoomMaker] ⚠️ networkEngine ausente (host/lock não aplicados). Chat configurado:', r.chatHooks);
-        if (!r.chatHooks) console.warn('[RoomMaker] ⚠️ Chat não configurado (sgrAPI ausente?)');
+        if (!r.ok) console.warn('[RoomMaker] ⚠️ networkEngine missing (host/lock not applied). Chat configured:', r.chatHooks);
+        if (!r.chatHooks) console.warn('[RoomMaker] ⚠️ Chat not configured (sgrAPI missing?)');
       }
     } catch (e) {
-      console.warn('[RoomMaker] configureRoom execute falhou (sgrAPI/toolFunctions?):', e);
+      console.warn('[RoomMaker] configureRoom execution failed (sgrAPI/toolFunctions?):', e);
     }
 
     const roundsInput = await frame.waitForSelector('#newbonklobby_roundsinput', { timeout: 5000 }).catch(() => null);
@@ -428,7 +429,7 @@ export class RoomMaker {
           sgr.toolFunctions.networkEngine.changeOwnTeam(0);
         }
       });
-      console.log('[RoomMaker] 👁️ Bot em espectador');
+      console.log('[RoomMaker] 👁️ Bot set to spectator');
     } catch (_) {}
 
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -453,9 +454,9 @@ export class RoomMaker {
         }, favIndex);
         if (favResult && (favResult as any).ok) {
           const name = (favResult as any).name ?? '(favorito)';
-          console.log(`[RoomMaker] 🗺️ Mapa carregado: posição ${favIndex} nos favoritos (${name})`);
+          console.log(`[RoomMaker] 🗺️ Map loaded: favorite index ${favIndex} (${name})`);
         } else {
-          console.warn(`[RoomMaker] ⚠️ Nenhum mapa na posição ${favIndex} dos favoritos`);
+          console.warn(`[RoomMaker] ⚠️ No map at favorite index ${favIndex}`);
         }
       } else if (params.maps && params.maps.length > 0) {
         await frame.evaluate((mapJson: string) => {
@@ -464,7 +465,7 @@ export class RoomMaker {
             sgrAPI.loadMap(JSON.parse(mapJson));
           }
         }, params.maps[0]);
-        console.log('[RoomMaker] 🗺️ Mapa do modo carregado (JSON config)');
+        console.log('[RoomMaker] 🗺️ Mode map loaded (JSON config)');
       } else {
         const favResult = await frame.evaluate(async () => {
           const sgr = (window as any).sgrAPI;
@@ -477,13 +478,13 @@ export class RoomMaker {
           return { ok: false, reason: 'no_fav_maps' };
         });
         if (favResult && (favResult as any).ok) {
-          console.log('[RoomMaker] 🗺️ Mapa favorito carregado (1º da lista)');
+          console.log('[RoomMaker] 🗺️ Favorite map loaded (first in list)');
         }
       }
     } catch (e) {
       if (debugLog) console.log('[RoomMaker:LOG] getFav/loadMap:', (e as Error).message);
     }
 
-    console.log('[RoomMaker] ✅ Sala configurada');
+    console.log('[RoomMaker] ✅ Room configured');
   }
 }

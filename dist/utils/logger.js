@@ -7,7 +7,7 @@ exports.Logger = void 0;
 const chalk_1 = __importDefault(require("chalk"));
 class Logger {
     static formatMessage(level, message) {
-        const timestamp = chalk_1.default.gray(new Date().toLocaleTimeString("pt-BR"));
+        const timestamp = chalk_1.default.gray(new Date().toISOString());
         const prefix = chalk_1.default.bold("[bonktools]");
         let levelColor;
         switch (level) {

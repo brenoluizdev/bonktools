@@ -14,7 +14,7 @@ exports.MESSAGES = {
     // Boas-vindas
     WELCOME: (username) => `👋 Bem-vindo à FUTHERO, ${username}!`,
     DEV_WARNING: "⚠️ Lembre-se: Essa sala está em desenvolvimento e pode apresentar bugs.",
-    DISCORD_LINK: "ℹ️ Faça parte da nossa comunidade no Discord: https://discord.gg/SGFHp9hk",
+    DISCORD_LINK: "ℹ️ Faça parte da nossa comunidade no Discord: https://discord.gg/qRJ4UCMfja",
     // Fila e estados
     PLAYER_LEFT: (username) => `👋 ${username} saiu da sala.`,
     GAME_ENDED: "🎉 O jogo acabou!",

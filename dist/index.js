@@ -41,32 +41,47 @@ const fs_1 = require("fs");
 const path_1 = __importDefault(require("path"));
 const browserManager_1 = require("./browser/browserManager");
 const eventsPath = path_1.default.join(__dirname, "events");
-for (const file of (0, fs_1.readdirSync)(eventsPath)) {
-    Promise.resolve(`${path_1.default.join(eventsPath, file)}`).then(s => __importStar(require(s))).then((module) => {
+function listEventFiles(dir) {
+    const items = (0, fs_1.readdirSync)(dir);
+    const files = [];
+    for (const item of items) {
+        const full = path_1.default.join(dir, item);
+        const st = (0, fs_1.statSync)(full);
+        if (st.isDirectory()) {
+            files.push(...listEventFiles(full));
+        }
+        else if (st.isFile() && (full.endsWith(".js") || full.endsWith(".cjs") || full.endsWith(".mjs"))) {
+            files.push(full);
+        }
+    }
+    return files;
+}
+for (const file of listEventFiles(eventsPath)) {
+    Promise.resolve(`${file}`).then(s => __importStar(require(s))).then((module) => {
         if (typeof module.default === "function") {
             module.default(bot_1.default);
-            console.log(`🟢 Loaded event: ${file}`);
+            console.log(`🟢 Loaded event: ${path_1.default.relative(eventsPath, file)}`);
         }
     });
 }
-// Graceful shutdown - fechar navegador ao encerrar bot
+// Graceful shutdown - close browser when bot is terminated
 process.on("SIGINT", async () => {
-    console.log("\n[Bot] Recebido SIGINT (Ctrl+C). Encerrando...");
+    console.log("\n[Bot] Received SIGINT (Ctrl+C). Shutting down...");
     try {
         await browserManager_1.browserManager.close();
     }
     catch (error) {
-        console.error("[Bot] Erro ao fechar navegador:", error);
+        console.error("[Bot] Error while closing browser:", error);
     }
     process.exit(0);
 });
 process.on("SIGTERM", async () => {
-    console.log("\n[Bot] Recebido SIGTERM. Encerrando...");
+    console.log("\n[Bot] Received SIGTERM. Shutting down...");
     try {
         await browserManager_1.browserManager.close();
     }
     catch (error) {
-        console.error("[Bot] Erro ao fechar navegador:", error);
+        console.error("[Bot] Error while closing browser:", error);
     }
     process.exit(0);
 });

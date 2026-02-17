@@ -4,7 +4,7 @@ type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
 export class Logger {
   private static formatMessage(level: LogLevel, message: string): string {
-    const timestamp = chalk.gray(new Date().toLocaleTimeString("pt-BR"));
+    const timestamp = chalk.gray(new Date().toISOString());
     const prefix = chalk.bold("[bonktools]");
 
     let levelColor: string;

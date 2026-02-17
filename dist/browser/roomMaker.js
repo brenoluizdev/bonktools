@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -17,7 +50,7 @@ class RoomMaker {
         try {
             this.injectorScript = await promises_1.default.readFile(path_1.default.join(projectRoot, 'dependencies', 'CondensedInjector.js'), 'utf-8');
             this.sgrApiScript = await promises_1.default.readFile(path_1.default.join(projectRoot, 'dependencies', 'sgrAPI.user.js'), 'utf-8');
-            console.log('[RoomMaker] ✅ Scripts carregados');
+            console.log('[RoomMaker] ✅ Scripts loaded');
         }
         catch (error) {
             console.error('[RoomMaker] ❌ Erro ao carregar scripts:');
@@ -28,48 +61,109 @@ class RoomMaker {
         }
     }
     async createRoom(params) {
-        console.log('[RoomMaker] 🚀 Iniciando criação da sala...');
+        // Lido em runtime para respeitar .env já carregado (imports rodam antes do dotenv)
+        const useFirefox = process.env.BROWSER === 'firefox';
+        if (useFirefox) {
+            return this.createRoomWithPlaywright(params);
+        }
+        return this.createRoomWithPuppeteer(params);
+    }
+    async createRoomWithPuppeteer(params) {
+        console.log('[RoomMaker] 🚀 Starting room creation (Chromium)...');
         if (this.lastRoomTime) {
             const elapsed = Date.now() - this.lastRoomTime;
             const waitTime = 5000 - elapsed;
             if (waitTime > 0) {
-                console.log(`[RoomMaker] ⏳ Aguardando ${waitTime}ms (rate limit)...`);
+                console.log(`[RoomMaker] ⏳ Waiting ${waitTime}ms (rate limit)...`);
                 await new Promise(resolve => setTimeout(resolve, waitTime));
             }
         }
-        // 1. Abrir navegador
         const browser = await this.launchBrowser();
         const page = await browser.newPage();
-        // Configurar timeout padrão
         page.setDefaultTimeout(30000);
         try {
-            console.log('[RoomMaker] 📜 Registrando scripts (evaluateOnNewDocument)...');
+            console.log('[RoomMaker] 📜 Registering scripts (evaluateOnNewDocument)...');
             const injectorWithHeadCheck = '(function run(){ if(!document.head){ setTimeout(run,10); return; }\n' + this.injectorScript + '\n})();';
             await page.evaluateOnNewDocument(injectorWithHeadCheck);
             await page.evaluateOnNewDocument(this.sgrApiScript);
-            console.log('[RoomMaker] 🌐 Navegando para Bonk.io...');
+            console.log('[RoomMaker] 🌐 Navigating to Bonk.io...');
             page.goto('https://bonk.io/', { waitUntil: 'domcontentloaded' }).catch(() => { });
-            console.log('[RoomMaker] 🎮 Entrando no frame do jogo...');
+            console.log('[RoomMaker] 🎮 Entering game frame...');
             const frameHandle = await page.waitForSelector('#maingameframe', { timeout: 10000 });
             const frame = await frameHandle.contentFrame();
             if (!frame)
-                throw new Error('Frame do jogo não encontrado');
+                throw new Error('Game frame not found');
             await this.login(frame);
             await this.createGameRoom(frame, params);
             const roomLink = await this.getRoomLink(frame);
             await this.configureRoom(page, frame, params);
-            console.log(`[RoomMaker] ✅ Sala criada com sucesso: ${roomLink}`);
+            console.log(`[RoomMaker] ✅ Room created successfully: ${roomLink}`);
             this.lastRoomTime = Date.now();
             return { browser, page, roomLink, maps: params.maps };
         }
         catch (error) {
-            console.error('[RoomMaker] ❌ Erro ao criar sala:', error);
+            console.error('[RoomMaker] ❌ Error while creating room:', error);
+            await browser.close();
+            throw error;
+        }
+    }
+    async createRoomWithPlaywright(params) {
+        console.log('[RoomMaker] 🚀 Starting room creation (Firefox)...');
+        if (this.lastRoomTime) {
+            const elapsed = Date.now() - this.lastRoomTime;
+            const waitTime = 5000 - elapsed;
+            if (waitTime > 0) {
+                console.log(`[RoomMaker] ⏳ Waiting ${waitTime}ms (rate limit)...`);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+        }
+        const { firefox } = await Promise.resolve().then(() => __importStar(require('playwright')));
+        const headless = true;
+        const browser = await firefox.launch({
+            headless,
+            args: ['--window-size=1920,1080'],
+        });
+        // Chrome User-Agent to avoid infinite loading in Bonk.io (Firefox-only can fail)
+        const chromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+        const context = await browser.newContext({
+            viewport: { width: 1920, height: 1080 },
+            ignoreHTTPSErrors: true,
+            userAgent: chromeUserAgent,
+        });
+        const page = await context.newPage();
+        page.setDefaultTimeout(30000);
+        try {
+            console.log('[RoomMaker] 📜 Registering scripts (addInitScript)...');
+            const injectorWithHeadCheck = '(function run(){ if(!document.head){ setTimeout(run,10); return; }\n' + this.injectorScript + '\n})();';
+            await page.addInitScript({ content: injectorWithHeadCheck });
+            await page.addInitScript({ content: this.sgrApiScript });
+            console.log('[RoomMaker] 🌐 Navigating to Bonk.io...');
+            await page.goto('https://bonk.io/', { waitUntil: 'load', timeout: 60000 }).catch(() => { });
+            console.log('[RoomMaker] 🎮 Entering game frame...');
+            await page.waitForSelector('#maingameframe', { timeout: 10000 });
+            const frameEl = await page.$('#maingameframe');
+            if (!frameEl)
+                throw new Error('Element #maingameframe not found');
+            const frame = await frameEl.contentFrame();
+            await frameEl.dispose();
+            if (!frame)
+                throw new Error('Game frame not found');
+            await this.login(frame);
+            await this.createGameRoom(frame, params);
+            const roomLink = await this.getRoomLink(frame);
+            await this.configureRoom(page, frame, params);
+            console.log(`[RoomMaker] ✅ Room created successfully: ${roomLink}`);
+            this.lastRoomTime = Date.now();
+            return { browser: browser, page: page, roomLink, maps: params.maps };
+        }
+        catch (error) {
+            console.error('[RoomMaker] ❌ Error while creating room:', error);
             await browser.close();
             throw error;
         }
     }
     async launchBrowser() {
-        const headless = process.env.HEADLESS === '1' || process.env.HEADLESS === 'true';
+        const headless = true;
         console.log(`[RoomMaker] 🌐 Abrindo navegador (headless: ${headless})...`);
         return await puppeteer_1.default.launch({
             headless,
@@ -80,10 +174,7 @@ class RoomMaker {
                 '--disable-features=IsolateOrigins,site-per-process',
                 '--window-size=1920,1080'
             ],
-            defaultViewport: {
-                width: 1920,
-                height: 1080
-            }
+            defaultViewport: null
         });
     }
     async retry(operation, maxDurationMs = 10000, intervalMs = 250) {
@@ -101,7 +192,8 @@ class RoomMaker {
         throw lastError ?? new Error('Retry timeout');
     }
     async safeClick(frame, selector, waitMs = 500) {
-        await frame.waitForSelector(selector, { timeout: 10000, visible: true });
+        const opts = { timeout: 10000, visible: true, state: 'visible' };
+        await frame.waitForSelector(selector, opts);
         await new Promise(resolve => setTimeout(resolve, waitMs));
         try {
             await frame.click(selector);
@@ -115,11 +207,11 @@ class RoomMaker {
         }
     }
     async login(frame) {
-        console.log('[RoomMaker] 🔐 Fazendo login...');
+        console.log('[RoomMaker] 🔐 Logging in...');
         const username = process.env.BOT_USERNAME || 'FUTHERO BOT';
         const password = process.env.BOT_PASSWORD;
         if (!password) {
-            throw new Error('BOT_PASSWORD não definido no .env');
+            throw new Error('BOT_PASSWORD is not defined in .env');
         }
         await frame.waitForSelector('#guestOrAccountContainer_accountButton', { timeout: 10000 });
         await this.retry(() => this.safeClick(frame, '#guestOrAccountContainer_accountButton', 250));
@@ -142,19 +234,19 @@ class RoomMaker {
             catch { }
         }
         if (!loggedIn) {
-            throw new Error('Login falhou - verifique BOT_USERNAME e BOT_PASSWORD no .env');
+            throw new Error('Login failed - check BOT_USERNAME and BOT_PASSWORD in .env');
         }
         try {
             await frame.waitForSelector('#pretty_top_volume_music', { timeout: 3000 });
             await this.retry(() => this.safeClick(frame, '#pretty_top_volume_music', 250));
         }
         catch {
-            console.log('[RoomMaker] Botão de música não encontrado (ignorado, seguindo...)');
+            console.log('[RoomMaker] Music button not found (ignored, continuing...)');
         }
-        console.log('[RoomMaker] ✅ Login realizado');
+        console.log('[RoomMaker] ✅ Login successful');
     }
     async createGameRoom(frame, params) {
-        console.log('[RoomMaker] 🏗️  Criando sala...');
+        console.log('[RoomMaker] 🏗️  Creating room...');
         await frame.waitForSelector('#classic_mid_customgame', { timeout: 5000 });
         await this.retry(() => this.safeClick(frame, '#classic_mid_customgame', 250));
         const roomInfo = {
@@ -199,10 +291,10 @@ class RoomMaker {
         if (!created) {
             throw new Error('Room creation timeout.');
         }
-        console.log('[RoomMaker] ✅ Sala criada no lobby');
+        console.log('[RoomMaker] ✅ Room created in lobby');
     }
     async getRoomLink(frame) {
-        console.log('[RoomMaker] 🔗 Obtendo link da sala...');
+        console.log('[RoomMaker] 🔗 Getting room link...');
         await frame.waitForSelector('#newbonklobby_linkbutton', { timeout: 5000 });
         await this.retry(() => this.safeClick(frame, '#newbonklobby_linkbutton', 250));
         const roomLink = await this.retry(async () => {
@@ -222,7 +314,7 @@ class RoomMaker {
         return roomLink;
     }
     async configureRoom(page, frame, params) {
-        console.log('[RoomMaker] ⚙️  Configurando sala...');
+        console.log('[RoomMaker] ⚙️  Configuring room...');
         const debugLog = process.env.BONK_DEBUG === '1' || process.env.BONK_DEBUG === 'true';
         const maxWaitMs = 6000;
         const pollIntervalMs = 400;
@@ -237,10 +329,10 @@ class RoomMaker {
             await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         }
         if (!hasEngine) {
-            console.warn('[RoomMaker] ⚠️ networkEngine não apareceu após ' + maxWaitMs + 'ms. Chat e lock podem não funcionar.');
+            console.warn('[RoomMaker] ⚠️ networkEngine did not appear after ' + maxWaitMs + 'ms. Chat and lock might not work.');
         }
         else if (debugLog) {
-            console.log('[RoomMaker:LOG] networkEngine disponível após espera');
+            console.log('[RoomMaker:LOG] networkEngine available after wait');
         }
         await new Promise(resolve => setTimeout(resolve, 300));
         try {
@@ -274,15 +366,15 @@ class RoomMaker {
             if (configResult) {
                 const r = configResult;
                 if (!r.ok)
-                    console.warn('[RoomMaker] ⚠️ networkEngine ausente (host/lock não aplicados). Chat configurado:', r.chatHooks);
+                    console.warn('[RoomMaker] ⚠️ networkEngine missing (host/lock not applied). Chat configured:', r.chatHooks);
                 if (!r.chatHooks)
-                    console.warn('[RoomMaker] ⚠️ Chat não configurado (sgrAPI ausente?)');
+                    console.warn('[RoomMaker] ⚠️ Chat not configured (sgrAPI missing?)');
             }
         }
         catch (e) {
-            console.warn('[RoomMaker] configureRoom execute falhou (sgrAPI/toolFunctions?):', e);
+            console.warn('[RoomMaker] configureRoom execution failed (sgrAPI/toolFunctions?):', e);
         }
-        const roundsInput = await frame.$('#newbonklobby_roundsinput');
+        const roundsInput = await frame.waitForSelector('#newbonklobby_roundsinput', { timeout: 5000 }).catch(() => null);
         if (roundsInput) {
             await roundsInput.click();
             await page.keyboard.down('Control');
@@ -290,7 +382,7 @@ class RoomMaker {
             await page.keyboard.up('Control');
             await page.keyboard.type(String(params.rounds), { delay: 60 });
             await page.keyboard.press('Tab');
-            await roundsInput.dispose();
+            await roundsInput.dispose?.();
         }
         try {
             await frame.evaluate(() => {
@@ -299,25 +391,36 @@ class RoomMaker {
                     sgr.toolFunctions.networkEngine.changeOwnTeam(0);
                 }
             });
-            console.log('[RoomMaker] 👁️ Bot em espectador');
+            console.log('[RoomMaker] 👁️ Bot set to spectator');
         }
         catch (_) { }
         await new Promise(resolve => setTimeout(resolve, 500));
         try {
-            const favResult = await frame.evaluate(async () => {
-                const sgr = window.sgrAPI;
-                if (!sgr || typeof sgr.getFav !== 'function')
-                    return { ok: false, reason: 'no_getFav' };
-                const res = await sgr.getFav(0);
-                if (res && res.maps && res.maps.length > 0) {
-                    if (typeof sgr.loadMap === 'function')
-                        sgr.loadMap(res.maps[0]);
-                    return { ok: true, mapId: res.maps[0].id };
+            // Carregar mapa: por posição nos favoritos (favoriteIndex) ou por JSON (params.maps) ou 1º favorito
+            const favIndex = params.favoriteIndex ?? -1;
+            const loadByFavoriteIndex = favIndex >= 0;
+            if (loadByFavoriteIndex) {
+                const favResult = await frame.evaluate(async (index) => {
+                    const sgr = window.sgrAPI;
+                    if (!sgr || typeof sgr.getFav !== 'function')
+                        return { ok: false, reason: 'no_getFav' };
+                    const offset = Math.floor(index / 32);
+                    const subIndex = index % 32;
+                    const res = await sgr.getFav(offset);
+                    if (res && res.maps && res.maps[subIndex]) {
+                        if (typeof sgr.loadMap === 'function')
+                            sgr.loadMap(res.maps[subIndex]);
+                        return { ok: true, mapId: res.maps[subIndex].id, name: res.maps[subIndex].name };
+                    }
+                    return { ok: false, reason: 'no_fav_at_index' };
+                }, favIndex);
+                if (favResult && favResult.ok) {
+                    const name = favResult.name ?? '(favorito)';
+                    console.log(`[RoomMaker] 🗺️ Map loaded: favorite index ${favIndex} (${name})`);
                 }
-                return { ok: false, reason: 'no_fav_maps' };
-            });
-            if (favResult && favResult.ok) {
-                console.log('[RoomMaker] 🗺️ Mapa favorito carregado');
+                else {
+                    console.warn(`[RoomMaker] ⚠️ No map at favorite index ${favIndex}`);
+                }
             }
             else if (params.maps && params.maps.length > 0) {
                 await frame.evaluate((mapJson) => {
@@ -326,14 +429,31 @@ class RoomMaker {
                         sgrAPI.loadMap(JSON.parse(mapJson));
                     }
                 }, params.maps[0]);
-                console.log('[RoomMaker] 🗺️ Mapa do config carregado');
+                console.log('[RoomMaker] 🗺️ Mode map loaded (JSON config)');
+            }
+            else {
+                const favResult = await frame.evaluate(async () => {
+                    const sgr = window.sgrAPI;
+                    if (!sgr || typeof sgr.getFav !== 'function')
+                        return { ok: false, reason: 'no_getFav' };
+                    const res = await sgr.getFav(0);
+                    if (res && res.maps && res.maps.length > 0) {
+                        if (typeof sgr.loadMap === 'function')
+                            sgr.loadMap(res.maps[0]);
+                        return { ok: true, mapId: res.maps[0].id };
+                    }
+                    return { ok: false, reason: 'no_fav_maps' };
+                });
+                if (favResult && favResult.ok) {
+                    console.log('[RoomMaker] 🗺️ Favorite map loaded (first in list)');
+                }
             }
         }
         catch (e) {
             if (debugLog)
                 console.log('[RoomMaker:LOG] getFav/loadMap:', e.message);
         }
-        console.log('[RoomMaker] ✅ Sala configurada');
+        console.log('[RoomMaker] ✅ Room configured');
     }
 }
 exports.RoomMaker = RoomMaker;

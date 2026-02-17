@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RATING_CONFIG = exports.TIMEOUTS = exports.ROOM_CONFIG = void 0;
 exports.ROOM_CONFIG = {
-    name: process.env.ROOM_NAME || "FUTHERO | SALA AUTOMATIZADA",
+    name: process.env.ROOM_NAME || "🔥 FUTHERO | X2 | FUTSAL 🔥",
     password: process.env.ROOM_PASSWORD ?? "",
     maxPlayers: parseInt(process.env.ROOM_MAX_PLAYERS || "8"),
     hidden: process.env.ROOM_HIDDEN === "true",
