@@ -148,7 +148,7 @@ export function create1v1PickMode(modeId: GameModeId): GameMode {
         s.pickable = [...inGame];
         room.setState(RoomState.PICK);
         room.startTransitionTimer(60000);
-        await room.chat(`${specPlayers[0].username}, digite !p <abreviação> para escolher quem enfrentar. Ex: !p nome`);
+        await room.chat(`${specPlayers[0].username}, digite !escolher <abreviação> para escolher quem enfrentar. Ex: !escolher nome`);
         return;
       }
 
@@ -164,7 +164,7 @@ export function create1v1PickMode(modeId: GameModeId): GameMode {
     },
 
     getHelpMessage(): string {
-      return '!help !ping !queue !r !p <jogador> !reset !cancel | !brbrr !sortear !kick !ban (votação)';
+      return '!help !ping !queue !r !escolher <jogador> !reset !cancel | !p pausar (votação) | !brbrr !sortear !kick !ban (votação)';
     },
 
     async handleCommand(
@@ -173,12 +173,12 @@ export function create1v1PickMode(modeId: GameModeId): GameMode {
       cmd: string,
       args: string[]
     ): Promise<boolean> {
-      if (cmd !== 'p' && cmd !== 'pick') return false;
+      if (cmd !== 'e' && cmd !== 'escolher') return false;
       if (room.getState() !== RoomState.PICK) return false;
 
       const s = state();
       if (!s.picker || s.picker.id !== playerId) {
-        await room.chat(`É a vez de ${s.picker?.username ?? 'quem está no spec'} digitar !p <jogador>.`);
+        await room.chat(`É a vez de ${s.picker?.username ?? 'quem está no spec'} digitar !escolher <jogador>.`);
         return true;
       }
       if (!s.pickable?.length) {
@@ -190,7 +190,7 @@ export function create1v1PickMode(modeId: GameModeId): GameMode {
       const names = s.pickable.map(p => p.username);
       const matches = fuzzyMatch(query, names);
       if (matches.length !== 1) {
-        await room.chat('Digite !p <abreviação> de um jogador. Apenas uma correspondência.');
+        await room.chat('Digite !escolher <abreviação> de um jogador. Apenas uma correspondência.');
         return true;
       }
       const pickedName = matches[0];

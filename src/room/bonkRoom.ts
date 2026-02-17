@@ -50,6 +50,7 @@ export class BonkRoom {
   private voteKick: { targetId: number; votes: Set<number> } | null = null;
   private voteBan: { targetId: number; votes: Set<number> } | null = null;
   private voteSortear: Set<number> | null = null;
+  private votePause: Set<number> | null = null;
   private voteCooldownUntil = 0;
   private static readonly VOTE_COOLDOWN_MS = 30000;
 
@@ -320,6 +321,10 @@ export class BonkRoom {
       case 'ban':
         await this.handleVoteBan(playerId, args);
         break;
+      case 'p':
+      case 'pause':
+        await this.handleVotePause(playerId);
+        break;
       default: {
         const handled = await this.mode.handleCommand(room, playerId, cmd, args);
         if (!handled) await this.chat(this.mode.getHelpMessage());
@@ -516,6 +521,50 @@ export class BonkRoom {
     }
   }
 
+  private async handleVotePause(playerId: number): Promise<void> {
+    if (Date.now() < this.voteCooldownUntil) {
+      await this.chat('Aguarde antes de iniciar outra votação.');
+      return;
+    }
+    const inRoom = this.getInRoomPlayers();
+    if (inRoom.length < 2) {
+      await this.chat('Precisam de pelo menos 2 jogadores para votar pausa.');
+      return;
+    }
+    if (this.state !== RoomState.IN_GAME) {
+      await this.chat('Pausa só durante a partida. Use !p quando o jogo estiver rolando.');
+      return;
+    }
+    if (!this.votePause) this.votePause = new Set();
+    if (this.votePause.has(playerId)) {
+      await this.chat('Você já votou para pausar.');
+      return;
+    }
+    this.votePause.add(playerId);
+    const majority = this.getVoteMajority();
+    const total = inRoom.length;
+    await this.chat(`Pausar jogo: ${this.votePause.size}/${total} votos (precisa ${majority}). Use !p para votar.`);
+    if (this.votePause.size >= majority) {
+      this.votePause = null;
+      this.voteCooldownUntil = Date.now() + BonkRoom.VOTE_COOLDOWN_MS;
+      await this.triggerPause();
+      await this.chat('Pausa ativada por votação.');
+    }
+  }
+
+  private async triggerPause(): Promise<void> {
+    const frame = await this.getGameFrame();
+    if (!frame) return;
+    try {
+      await frame.evaluate(() => {
+        const sgr = (window as any).sgrAPI;
+        if (typeof sgr?.pause === 'function') sgr.pause();
+      });
+    } catch {
+      // API de pausa pode não existir no jogo; mensagem já foi enviada
+    }
+  }
+
   private async kickPlayer(playerId: number): Promise<boolean> {
     const frame = await this.getGameFrame();
     if (!frame) return false;
@@ -702,6 +751,7 @@ export class BonkRoom {
     this.voteKick = null;
     this.voteBan = null;
     this.voteSortear = null;
+    this.votePause = null;
     for (const player of this.queue.values()) {
       player.readyCmd = false;
     }

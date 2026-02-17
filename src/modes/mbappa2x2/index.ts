@@ -266,7 +266,7 @@ export const mbappa2x2Mode: GameMode = {
   },
 
   getHelpMessage(): string {
-    return '!help !ping !queue !r !reset !cancel | no pick: digite o número (1, 2...) | !brbrr !sortear !kick !ban (votação)';
+    return '!help !ping !queue !r !reset !cancel | pick: digite o número (1, 2...) | !p pausar (votação) | !brbrr !sortear !kick !ban (votação)';
   },
 
   async handleCommand(
@@ -276,14 +276,14 @@ export const mbappa2x2Mode: GameMode = {
     args: string[]
   ): Promise<boolean> {
     const isNumberOnly = cmd === '' && args.length === 1 && room.getState() === RoomState.PICK && state.captain?.id === playerId;
-    if (cmd !== 'p' && cmd !== 'pick' && !isNumberOnly) return false;
+    if (!isNumberOnly) return false;
     if (room.getState() !== RoomState.PICK) return false;
     if (!state.captain || state.captain.id !== playerId) {
       await room.chat(`É a vez do capitão ${state.captain?.username ?? '?'} digitar o número da fila (ex: 1 ou 2).`);
       return true;
     }
 
-    const raw = isNumberOnly ? (args[0] ?? '').trim() : args.join(' ').trim();
+    const raw = (args[0] ?? '').trim();
     const num = parseInt(raw, 10);
     if (Number.isNaN(num) || num < 1) {
       const list = formatSpecQueueList(room);

@@ -277,7 +277,7 @@ export function createHybridMode(modeId: GameModeId): GameMode {
     },
 
     getHelpMessage(): string {
-      return '!help !ping !queue !r !reset !cancel | no pick: digite o número (1, 2...) | !brbrr !sortear !kick !ban (votação)';
+      return '!help !ping !queue !r !reset !cancel | pick: digite o número (1, 2...) | !p pausar (votação) | !brbrr !sortear !kick !ban (votação)';
     },
 
     async handleCommand(
@@ -288,7 +288,7 @@ export function createHybridMode(modeId: GameModeId): GameMode {
     ): Promise<boolean> {
       const s = state();
       const isNumberOnly = cmd === '' && args.length === 1 && room.getState() === RoomState.PICK && s.captain?.id === playerId;
-      if (cmd !== 'p' && cmd !== 'pick' && !isNumberOnly) return false;
+      if (!isNumberOnly) return false;
       if (room.getState() !== RoomState.PICK) return false;
 
       if (!s.captain || s.captain.id !== playerId) {
@@ -296,7 +296,7 @@ export function createHybridMode(modeId: GameModeId): GameMode {
         return true;
       }
 
-      const raw = isNumberOnly ? (args[0] ?? '').trim() : args.join(' ').trim();
+      const raw = (args[0] ?? '').trim();
       const num = parseInt(raw, 10);
       if (Number.isNaN(num) || num < 1) {
         const list = formatSpecQueueList(room, modeId);
