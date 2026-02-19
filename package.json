@@ -22,7 +22,9 @@
     "investigate:compare": "node --require ts-node/register scripts/investigate-compare-payloads.ts",
     "test:browser": "ts-node scripts/test-browser-start.ts",
     "test:browser:headless": "HEADLESS=1 ts-node scripts/test-browser-start.ts",
-    "publish": "npm publish --access public"
+    "new-version": "npm version patch",
+    "prepublishOnly": "npm run build",
+    "publish":  "npm run build && git add . && git commit -m \"chore: release\" && npm version patch && git push && git push --tags && npm publish"
   },
   "dependencies": {
     "bonktools": "^3.2.0",
