@@ -1,6 +1,6 @@
 {
   "name": "@futhero/bonk-rooms",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "commonjs",
   "main": "dist/lib/index.js",
   "types": "dist/lib/index.d.ts",
