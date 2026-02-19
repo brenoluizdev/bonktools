@@ -1,5 +1,6 @@
 {
-  "name": "@futhero/bonk-rooms",
+  "name": "bonktools",
+  "description": "Advanced Bonk.io bot library with physics simulation and game state management",
   "version": "4.1.0",
   "type": "commonjs",
   "main": "dist/lib/index.js",
@@ -20,7 +21,8 @@
     "test:payload": "node --test --require ts-node/register test/investigation/triggerStartPayload.test.ts",
     "investigate:compare": "node --require ts-node/register scripts/investigate-compare-payloads.ts",
     "test:browser": "ts-node scripts/test-browser-start.ts",
-    "test:browser:headless": "HEADLESS=1 ts-node scripts/test-browser-start.ts"
+    "test:browser:headless": "HEADLESS=1 ts-node scripts/test-browser-start.ts",
+    "publish": "npm publish --access public"
   },
   "dependencies": {
     "bonktools": "^3.2.0",
