@@ -7,6 +7,7 @@ import io from 'socket.io-client';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as tls from 'node:tls';
 import pino from 'pino';
 import type { Logger } from 'pino';
 import { encodeTimesync } from '../codec/encode.js';
@@ -138,10 +139,11 @@ export class BonkTransport {
         });
       };
 
-      // Abordagem 1: CA Sectigo customizado + rejectUnauthorized:true.
+      // Abordagem 1: CA customizado + trust store padrão + rejectUnauthorized:true.
+      // Usa array para não substituir o store padrão — cobre rotações de CA do bonk.io.
       const primary = io(url, {
         ...baseOpts,
-        ca: fs.readFileSync(certPath),
+        ca: [fs.readFileSync(certPath).toString(), ...tls.rootCertificates],
         rejectUnauthorized: true,
       });
       attachHandlers(primary, true);

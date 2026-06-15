@@ -7,6 +7,7 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as tls from 'node:tls';
 import type { Logger } from 'pino';
 import type { LoginResponse, ServerInfo } from './types.js';
 
@@ -50,10 +51,13 @@ export class AuthClient {
   constructor(certPath?: string, logger?: Logger) {
     const resolvedCertPath = certPath ?? resolveDefaultCertPath();
 
-    // D-03: CA Sectigo via Agent — resolve a cadeia incompleta sem desabilitar TLS.
+    // D-03: CA customizado adicionado ao trust store padrão (não substitui).
+    // bonk2.io pode rotacionar CAs (ex: Sectigo → Google Trust Services);
+    // adicionar ao store padrão garante que tanto o cert bundlado quanto os
+    // root CAs do Node.js funcionem — sem NODE_TLS_REJECT_UNAUTHORIZED=0.
     this.httpsAgent = new Agent({
       connect: {
-        ca: fs.readFileSync(resolvedCertPath),
+        ca: [fs.readFileSync(resolvedCertPath), ...tls.rootCertificates],
       },
     });
     this.logger = logger;
