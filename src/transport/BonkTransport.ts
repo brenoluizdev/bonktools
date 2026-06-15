@@ -23,6 +23,23 @@ const ANTI_IDLE_INTERVAL_MS = 29 * 60 * 1000;
 const ANTI_IDLE_TOGGLE_DELAY_MS = 500;
 const CHANGE_OWN_TEAM_PACKET = 6; // teams: 0=spec, 1=ffa, 2=red, 3=blue, 4=green, 5=yellow
 
+/**
+ * Resolve o cert PEM default relativo ao módulo atual.
+ * No bundle dist achatado (`dist/index.js`), `path.dirname(fileURLToPath(import.meta.url))`
+ * aponta para `packages/core/dist`, e o cert está um nível acima em `packages/core/certs`
+ * → `'../certs/...'`. Quando o módulo roda do source (`src/transport/`), são dois níveis de
+ * subida (`src/transport` → `packages/core`) → `'../../certs/...'`. Tenta o caminho do dist
+ * primeiro e cai no do source se ausente, evitando ENOENT em ambos os contextos (CR-03).
+ */
+function resolveDefaultCertPath(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const distPath = path.join(here, '../certs/bonk_fullchain.pem');
+  if (fs.existsSync(distPath)) {
+    return distPath;
+  }
+  return path.join(here, '../../certs/bonk_fullchain.pem');
+}
+
 export class BonkTransport {
   private socket: Socket | null = null;
   private keepAliveTimer: NodeJS.Timeout | null = null;
@@ -81,9 +98,7 @@ export class BonkTransport {
     }
     this.state = 'connecting';
 
-    const certPath =
-      this.opts.certPath ??
-      path.join(fileURLToPath(import.meta.url), '../../../certs/bonk_fullchain.pem');
+    const certPath = this.opts.certPath ?? resolveDefaultCertPath();
     const url = `https://${this.opts.server.server}.bonk.io`;
     const baseOpts = {
       transports: ['websocket'] as string[],

@@ -22,6 +22,23 @@ interface GetRoomsResponse {
   country: string;
 }
 
+/**
+ * Resolve o cert PEM default relativo ao módulo atual.
+ * No bundle dist achatado (`dist/index.js`), `path.dirname(fileURLToPath(import.meta.url))`
+ * aponta para `packages/core/dist`, e o cert está um nível acima em `packages/core/certs`
+ * → `'../certs/...'`. Quando o módulo roda do source (`src/auth/`), são dois níveis de subida
+ * (`src/auth` → `packages/core`) → `'../../certs/...'`. Tenta o caminho do dist primeiro e
+ * cai no do source se ausente, evitando ENOENT em ambos os contextos (CR-03).
+ */
+function resolveDefaultCertPath(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const distPath = path.join(here, '../certs/bonk_fullchain.pem');
+  if (fs.existsSync(distPath)) {
+    return distPath;
+  }
+  return path.join(here, '../../certs/bonk_fullchain.pem');
+}
+
 export class AuthClient {
   private readonly httpsAgent: Agent;
   private readonly logger?: Logger | undefined;
@@ -31,8 +48,7 @@ export class AuthClient {
    * @param logger logger pino opcional — NUNCA loga token/credenciais, apenas eventos
    */
   constructor(certPath?: string, logger?: Logger) {
-    const resolvedCertPath =
-      certPath ?? path.join(fileURLToPath(import.meta.url), '../../../certs/bonk_fullchain.pem');
+    const resolvedCertPath = certPath ?? resolveDefaultCertPath();
 
     // D-03: CA Sectigo via Agent — resolve a cadeia incompleta sem desabilitar TLS.
     this.httpsAgent = new Agent({
