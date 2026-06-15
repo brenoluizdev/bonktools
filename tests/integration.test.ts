@@ -10,9 +10,12 @@ integration('integração — conexão ao vivo (BONK_INTEGRATION)', () => {
 
   it('completa o handshake EIO=3', async () => {
     const info = await client.discoverServer(null, 49);
-    const transport = new BonkTransport();
-    await transport.connect(info.server);
-    expect(transport.connected).toBe(true);
+    const transport = new BonkTransport({
+      server: info,
+      auth: { type: 'guest', guestName: 'TestBot' },
+    });
+    await transport.connect();
+    expect(transport.getState()).toBe('connected');
     transport.disconnect();
   }, 15000);
 
@@ -29,7 +32,9 @@ integration('integração — conexão ao vivo (BONK_INTEGRATION)', () => {
   }, 15000);
 
   it('registered auth — getToken retorna string (sem crash TLS)', async () => {
-    const token = await client.getToken('BOT_USERNAME', 'BOT_PASSWORD_REDACTED').catch((err: unknown) => err);
+    const token = await client
+      .getToken(process.env.BONK_USERNAME ?? '', process.env.BONK_PASSWORD ?? '')
+      .catch((err: unknown) => err);
     // Credenciais inválidas podem rejeitar; só garantimos que não foi erro de TLS.
     if (typeof token === 'string') {
       expect(typeof token).toBe('string');
