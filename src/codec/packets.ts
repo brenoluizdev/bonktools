@@ -416,4 +416,52 @@ export const INCOMING_PACKET_IDS = {
  */
 export const OUTGOING_PACKET_IDS = {
   TIMESYNC: 18,
+  CREATE_ROOM: 12,
+  JOIN_ROOM: 13,
+  SET_ROOM_NAME: 52,
+  SET_ROOM_PASSWORD: 53,
 } as const;
+
+// ─── Payloads de outgoing packets Phase 3 ─────────────────────────────────────
+
+export interface CreateRoomPayload {
+  peerID: string;
+  roomName: string;
+  maxPlayers: number;
+  password: string;
+  dbid: number;
+  guest: boolean;
+  minLevel: number;
+  maxLevel: number;
+  latitude: number;
+  longitude: number;
+  country: string;
+  version: number;
+  hidden: number;
+  quick: boolean;
+  mode: string;
+  token?: string;
+  guestName?: string;
+  avatar: { layers: unknown[]; bc: number };
+}
+
+export interface JoinRoomPayload {
+  joinID: string;
+  avatar: { layers: unknown[]; bc: number };
+  guest: boolean;
+  dbid: number;
+  version: number;
+  peerID: string;
+  bypass: string;
+  token?: string;
+  guestName?: string;
+  roomPassword?: string;
+}
+
+export interface SetRoomNamePayload {
+  newName: string;
+}
+
+export interface SetRoomPasswordPayload {
+  newPass: string;
+}
