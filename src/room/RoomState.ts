@@ -257,3 +257,11 @@ export function reducePlayerPings(state: RoomState, packet: PlayerPingsInput): R
   if (!changed) return state;
   return { ...state, players };
 }
+
+export function reduceGameStart(state: RoomState): RoomState {
+  return { ...state, inGame: true };
+}
+
+export function reduceGameEnd(state: RoomState): RoomState {
+  return { ...state, inGame: false };
+}

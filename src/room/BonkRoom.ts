@@ -20,6 +20,8 @@ import {
   reduceTabbedChange,
   reduceUsernameChange,
   reducePlayerPings,
+  reduceGameStart,
+  reduceGameEnd,
 } from './RoomState.js';
 import { defaultReconnectPolicy, computeBackoff } from './ReconnectPolicy.js';
 import type { BonkRoomEvents, BonkRoomOptions, RoomDeadReason } from './types.js';
@@ -202,14 +204,12 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
       case 'STATUS_MESSAGE':
         this.emit('status-message', packet);
-        // Pitfall 3: verificar myId===null antes de tratar room_full como terminal
-        // Se myId !== null, o bot já está na sala — room_full refere-se a outro jogador
-        if (
-          TERMINAL_STATUS_CODES.has(packet.status as StatusCode) &&
-          this._state.myId === null
-        ) {
-          const kind = `status-${packet.status}` as RoomDeadReason['kind'];
-          this.handleRoomDead({ kind });
+        // CR-02: 'banned' é sempre terminal; 'room_full' só é terminal quando myId===null
+        // (Pitfall 3: room_full refere-se a outro jogador quando bot já está na sala)
+        if (packet.status === 'banned') {
+          this.handleRoomDead({ kind: 'status-banned' });
+        } else if (packet.status === 'room_full' && this._state.myId === null) {
+          this.handleRoomDead({ kind: 'status-room_full' });
         }
         break;
 
@@ -242,10 +242,12 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         break;
 
       case 'GAME_END':
+        this._state = reduceGameEnd(this._state);
         this.emit('game-end', packet);
         break;
 
       case 'GAME_START':
+        this._state = reduceGameStart(this._state);
         this.emit('game-start', packet);
         break;
 
