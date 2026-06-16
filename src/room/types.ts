@@ -6,6 +6,7 @@
 import type { Logger } from 'pino';
 import type { ReconnectPolicy, ReconnectPolicyOptions } from './ReconnectPolicy.js';
 import type { BonkTransportOptions } from '../transport/types.js';
+import type { AuthOptions } from '../auth/types.js';
 import type {
   RoomJoinPacket,
   PlayerJoinPacket,
@@ -105,6 +106,88 @@ export interface BonkRoomOptions {
   reconnectPolicy?: ReconnectPolicyOptions;
   /** Logger pino por sala — Pitfall 4: nunca singleton de módulo. */
   logger?: Logger;
+}
+
+// ─── CreateRoomOptions / JoinRoomOptions ─────────────────────────────────────
+
+/**
+ * Endereço de sala já resolvido via AUTOJOIN ou manualmente.
+ * Passado para joinRoom como alternativa a URL string (D-06 Fase 3).
+ */
+export interface ResolvedRoomAddress {
+  /** hostname do servidor (ex: 'b2seattle1'). */
+  server: string;
+  /** endereço da sala (campo 'address' da resposta AUTOJOIN). */
+  joinId: string;
+  /** bypass da sala (passbypass do AUTOJOIN ou do URL). */
+  bypass: string;
+}
+
+/**
+ * Opções para createRoom() factory (D-01, D-03, D-04 Fase 3).
+ * auth: GuestAuthOptions ou RegisteredAuthOptions.
+ * desiredState: configuração da sala (roomName, password, maxPlayers, mode, rounds).
+ */
+export interface CreateRoomOptions {
+  auth: AuthOptions;
+  desiredState: DesiredRoomState;
+  /** ID de banco de dados do usuário. Default: 2 (placeholder genérico). */
+  dbid?: number;
+  /** Sala oculta na lista pública. Default: false. */
+  hidden?: boolean;
+  /** Quickplay match. Default: false. */
+  quick?: boolean;
+  /** Nível mínimo para entrar. Default: 0. */
+  minLevel?: number;
+  /** Nível máximo para entrar. Default: 999. */
+  maxLevel?: number;
+  /** Timeout para receber o packet 49 (SHARE_LINK). Default: 10000 ms. */
+  timeoutMs?: number;
+  /** Versão do protocolo bonk.io. Default: 49. */
+  protocolVersion?: number;
+  reconnectPolicy?: ReconnectPolicyOptions;
+  logger?: Logger;
+}
+
+/**
+ * Opções para joinRoom() factory (D-06, D-07, D-08 Fase 3).
+ */
+export interface JoinRoomOptions {
+  auth: AuthOptions;
+  /** 'host' (team=1) ou 'spectator' (team=0). Default: 'host'. */
+  role?: 'host' | 'spectator';
+  /** Senha da sala (se necessário). */
+  password?: string;
+  /** ID de banco de dados do usuário. Default: 2. */
+  dbid?: number;
+  /** Timeout para receber o packet 3 (ROOM_JOIN). Default: 10000 ms. */
+  timeoutMs?: number;
+  /** Versão do protocolo bonk.io. Default: 49. */
+  protocolVersion?: number;
+  reconnectPolicy?: ReconnectPolicyOptions;
+  logger?: Logger;
+}
+
+// ─── Erros tipados de ciclo de vida ──────────────────────────────────────────
+
+/**
+ * Lançado por createRoom() quando o packet 49 (SHARE_LINK) não chega no timeoutMs (D-04).
+ */
+export class RoomCreationTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`createRoom timed out after ${timeoutMs}ms — SHARE_LINK (packet 49) not received`);
+    this.name = 'RoomCreationTimeoutError';
+  }
+}
+
+/**
+ * Lançado por joinRoom() quando o packet 3 (ROOM_JOIN) não chega no timeoutMs (D-08).
+ */
+export class RoomJoinTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`joinRoom timed out after ${timeoutMs}ms — ROOM_JOIN (packet 3) not received`);
+    this.name = 'RoomJoinTimeoutError';
+  }
 }
 
 // ─── BonkRoomEvents ───────────────────────────────────────────────────────────

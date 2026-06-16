@@ -52,3 +52,20 @@ export interface ConnectOptions {
   protocolVersion?: number;
   logger?: Logger;
 }
+
+/**
+ * Resposta da autojoin.php do bonk.io.
+ * Retornada quando o caller faz joinRoom com URL string (D-06 Fase 3).
+ */
+export interface AutoJoinResponse {
+  /** join address para o JOIN_ROOM packet. */
+  address: string;
+  /** nome da sala (informativo). */
+  roomname: string;
+  /** hostname do servidor (ex: 'b2seattle1'). */
+  server: string;
+  /** bypass da sala. */
+  passbypass: string;
+  /** 'success' ou string de erro. */
+  r: 'success' | string;
+}
