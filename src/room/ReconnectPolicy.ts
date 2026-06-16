@@ -67,6 +67,6 @@ export function computeBackoff(policy: ReconnectPolicy, attempt: number): number
   const base = policy.initialDelayMs * Math.pow(policy.multiplier, attempt);
   const capped = Math.min(policy.maxDelayMs, base);
   if (!policy.jitter) return capped;
-  // Full jitter: uniforme entre [0, capped]
-  return Math.floor(Math.random() * capped);
+  // Full jitter com piso de 1ms para evitar busy-loop (capped+1 garante inclusão do limite)
+  return Math.max(1, Math.floor(Math.random() * (capped + 1)));
 }
