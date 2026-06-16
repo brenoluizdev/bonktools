@@ -4,6 +4,7 @@
 // Fluxo mapeado em 01-RESEARCH.md Pattern 2 + Q3.
 
 import { Agent, fetch as undiciFetch } from 'undici';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -82,6 +83,9 @@ export class AuthClient {
       dispatcher: this.httpsAgent,
     });
 
+    if (!response.ok) {
+      throw new Error(`login_legacy.php: HTTP ${response.status} ${response.statusText}`);
+    }
     const data = (await response.json()) as Partial<LoginResponse>;
     if (!data.token) {
       this.logger?.debug({ event: 'auth_failure' });
@@ -112,13 +116,19 @@ export class AuthClient {
       dispatcher: this.httpsAgent,
     });
 
-    const data = (await response.json()) as GetRoomsResponse;
+    if (!response.ok) {
+      throw new Error(`getrooms.php: HTTP ${response.status} ${response.statusText}`);
+    }
+    const data = (await response.json()) as Partial<GetRoomsResponse>;
+    if (!data.createserver) {
+      throw new Error(`discoverServer: campo 'createserver' ausente na resposta de getrooms.php`);
+    }
 
     return {
       server: data.createserver,
-      lat: data.lat,
-      long: data.long,
-      country: data.country,
+      lat: data.lat ?? 0,
+      long: data.long ?? 0,
+      country: data.country ?? 'XX',
     };
   }
 
@@ -127,7 +137,8 @@ export class AuthClient {
    * não chamada HTTP). 10 chars base36 + sufixo 'v00000'.
    */
   generatePeerID(): string {
-    return Math.random().toString(36).substring(2, 12) + 'v00000';
+    // 6 bytes = 48 bits de entropia, hex = 12 chars, nunca vazio (seguro vs Math.random)
+    return randomBytes(6).toString('hex') + 'v00000';
   }
 
   /**
