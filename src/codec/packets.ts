@@ -52,6 +52,10 @@ export const PlayerJoinSchema = z.object({
   guest: z.boolean(),
   level: z.number(),
   team: z.number(),
+  // ready e tabbed opcionais — não estão em todos os payloads de PLAYER_JOIN (Packets.md
+  // não documenta explicitamente, mas são incluídos em alguns contextos de servidor).
+  ready: z.boolean().optional(),
+  tabbed: z.boolean().optional(),
   avatar: z.unknown(),
 });
 
