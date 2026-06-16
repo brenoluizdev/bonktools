@@ -3,6 +3,7 @@
 // heartbeat timesync + anti-idle (CONN-04) e cleanup graceful (CONN-06).
 // Padrões mapeados em 01-RESEARCH.md (Pattern 1/3/4, Q8). Referência: BonkBot/src/bot.js.
 
+import EventEmitter from 'eventemitter3';
 import io from 'socket.io-client';
 import * as tls from 'node:tls';
 import pino from 'pino';
@@ -24,7 +25,7 @@ const CHANGE_OWN_TEAM_PACKET = 6; // teams: 0=spec, 1=ffa, 2=red, 3=blue, 4=gree
 // KI-01: bonk.io migrou para Google Trust Services (2026). tls.rootCertificates cobre GTS.
 // PEM Sectigo (bonk_fullchain.pem) removido da Abordagem 1 — mantém apenas tls.rootCertificates.
 
-export class BonkTransport {
+export class BonkTransport extends EventEmitter {
   private socket: Socket | null = null;
   private keepAliveTimer: NodeJS.Timeout | null = null;
   private antiIdleTimer: NodeJS.Timeout | null = null;
@@ -40,6 +41,7 @@ export class BonkTransport {
    * sem rede.
    */
   constructor(optsOrSocket: BonkTransportOptions | Socket) {
+    super();
     if (this.isTransportOptions(optsOrSocket)) {
       this.opts = optsOrSocket;
       this.logger = optsOrSocket.logger ?? pino({ name: 'bonk-transport' });
@@ -104,6 +106,17 @@ export class BonkTransport {
           });
           // Pitfall 7: nenhum packet é emitido antes deste evento 'connect'.
           resolve();
+          // CR-01: emitir 'disconnect' para BonkRoom via EventEmitter
+          socket.on('disconnect', (reason: unknown) => {
+            this.emit('disconnect', String(reason ?? 'unknown'));
+          });
+          // CR-01: emitir 'packet' para cada ID incoming (exceto TIMESYNC que não é processado por BonkRoom)
+          for (const [, id] of Object.entries(INCOMING_PACKET_IDS)) {
+            if (id === INCOMING_PACKET_IDS.TIMESYNC) continue;
+            socket.on(id as unknown as string, (...args: unknown[]) => {
+              this.emit('packet', [id, ...args]);
+            });
+          }
         });
 
         socket.on('connect_error', (...args: unknown[]) => {
