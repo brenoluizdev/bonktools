@@ -413,6 +413,10 @@ export const INCOMING_PACKET_IDS = {
 /**
  * IDs numéricos dos packets enviados pelo client (client→server).
  * Pitfall 2: TIMESYNC sai como 18 (não 23).
+ *
+ * ATENÇÃO: IDs outgoing e incoming são namespaces DISTINTOS no protocolo bonk.io.
+ * O mesmo número pode representar packets diferentes dependendo da direção.
+ * Ex: outgoing 52 = SET_ROOM_NAME; incoming 52 = TABBED.
  */
 export const OUTGOING_PACKET_IDS = {
   TIMESYNC: 18,
