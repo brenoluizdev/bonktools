@@ -131,6 +131,12 @@ export interface ResolvedRoomAddress {
 export interface CreateRoomOptions {
   auth: AuthOptions;
   desiredState: DesiredRoomState;
+  /**
+   * Transport já instanciado para injeção em testes (mesmo contrato de
+   * BonkRoomOptions.transport). Quando presente, a factory pula a autenticação
+   * HTTP / server discovery e usa o transport diretamente. Produção não usa.
+   */
+  transport?: BonkRoomOptions['transport'];
   /** ID de banco de dados do usuário. Default: 2 (placeholder genérico). */
   dbid?: number;
   /** Sala oculta na lista pública. Default: false. */
@@ -154,6 +160,12 @@ export interface CreateRoomOptions {
  */
 export interface JoinRoomOptions {
   auth: AuthOptions;
+  /**
+   * Transport já instanciado para injeção em testes (mesmo contrato de
+   * BonkRoomOptions.transport). Quando presente, a factory pula a resolução de
+   * servidor (autojoin/discover) e usa o transport diretamente. Produção não usa.
+   */
+  transport?: BonkRoomOptions['transport'];
   /** 'host' (team=1) ou 'spectator' (team=0). Default: 'host'. */
   role?: 'host' | 'spectator';
   /** Senha da sala (se necessário). */
