@@ -51,6 +51,8 @@ export type {
   GamemodeChangePacket,
   ChangeRoundsPacket,
   MapSwitchPacket,
+  MapSuggestPacket,
+  MapSuggestClientPacket,
   BalanceSetPacket,
   CountdownPacket,
   AbortCountdownPacket,
@@ -70,5 +72,7 @@ export type {
   DesiredRoomState,
   RoomDeadReason,
 } from './room/types.js';
+export { createEmptyRoomState } from './room/RoomState.js';
 export type { RoomState, PlayerData } from './room/RoomState.js';
+export { computeBackoff, defaultReconnectPolicy } from './room/ReconnectPolicy.js';
 export type { ReconnectPolicy, ReconnectPolicyOptions } from './room/ReconnectPolicy.js';
