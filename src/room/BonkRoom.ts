@@ -8,7 +8,7 @@ import pino from 'pino';
 import type { Logger } from 'pino';
 import { BonkTransport } from '../transport/BonkTransport.js';
 import { decodeWithZod } from '../codec/decode.js';
-import { TERMINAL_STATUS_CODES } from '../codec/packets.js';
+import { TERMINAL_STATUS_CODES, OUTGOING_PACKET_IDS } from '../codec/packets.js';
 import type { StatusCode, IncomingPacket, UnknownPacket } from '../codec/packets.js';
 import {
   createEmptyRoomState,
@@ -61,6 +61,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
   private roomStatus: 'idle' | 'connecting' | 'active' | 'dead' | 'rebuilding' = 'idle';
   private readonly logger: Logger;
   private readonly options: BonkRoomOptions;
+  private _shareLink: string | null = null;
 
   constructor(options: BonkRoomOptions) {
     super(); // EventEmitter3
@@ -92,6 +93,11 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     return this._state;
   }
 
+  /** Share link da sala (formato bonk.io/<roomId><bypass>). Null antes do packet 49. */
+  get shareLink(): string | null {
+    return this._shareLink;
+  }
+
   /**
    * Conecta ao bonk.io (modo real — usa BonkTransportOptions).
    * Em modo teste, o transport já foi injetado no constructor.
@@ -121,6 +127,52 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     this.transport?.disconnect();
     this.transport = null;
     this._state = createEmptyRoomState();
+  }
+
+  /**
+   * Envia packet outgoing para o servidor bonk.io.
+   * Usado pelas factories createRoom/joinRoom e métodos de game flow (Phase 4).
+   */
+  sendPacket(eventId: number, data: unknown): void {
+    if (!this.transport) {
+      throw new Error('BonkRoom.sendPacket: transport não conectado');
+    }
+    this.transport.sendPacket(eventId, data);
+  }
+
+  /**
+   * Aguarda um evento específico do EventEmitter3 com timeout.
+   * Usado internamente pelas factories para aguardar confirmação assíncrona.
+   * Rejeita com timeoutError se o evento não chegar dentro de timeoutMs.
+   */
+  protected _waitForEvent<K extends keyof BonkRoomEvents>(
+    event: K,
+    timeoutMs: number,
+    timeoutError: Error,
+  ): Promise<BonkRoomEvents[K][0]> {
+    return new Promise<BonkRoomEvents[K][0]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.off(event, handler as Parameters<typeof this.off>[1]);
+        reject(timeoutError);
+      }, timeoutMs);
+      const handler = (arg: BonkRoomEvents[K][0]): void => {
+        clearTimeout(timer);
+        resolve(arg);
+      };
+      this.once(event, handler as Parameters<typeof this.once>[1]);
+    });
+  }
+
+  /** Muda o nome da sala em runtime. Fire-and-forget (D-09 Fase 3). */
+  setRoomName(name: string): void {
+    this.desiredState.roomName = name;
+    this.transport?.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_NAME, { newName: name });
+  }
+
+  /** Muda a senha da sala em runtime. Fire-and-forget (D-10 Fase 3). */
+  setRoomPassword(password: string): void {
+    this.desiredState.password = password;
+    this.transport?.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_PASSWORD, { newPass: password });
   }
 
   // ─── Listeners do transport ────────────────────────────────────────────────
@@ -213,17 +265,17 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         }
         break;
 
-      case 'SHARE_LINK':
+      case 'SHARE_LINK': {
+        const url = `https://bonk.io/${packet.roomId}${packet.bypass}`;
+        this._shareLink = url; // persistir ANTES de emitir — getter disponível em handlers
         this.emit('share-link', packet);
         // Emitir room-rebuilt com o novo link da sala
-        {
-          const url = `https://bonk.io/${packet.roomId}${packet.bypass}`;
-          if (this.roomStatus === 'rebuilding' || this.roomStatus === 'connecting' || this.roomStatus === 'idle') {
-            this.roomStatus = 'active';
-            this.emit('room-rebuilt', url);
-          }
+        if (this.roomStatus === 'rebuilding' || this.roomStatus === 'connecting' || this.roomStatus === 'idle') {
+          this.roomStatus = 'active';
+          this.emit('room-rebuilt', url);
         }
         break;
+      }
 
       case 'HOST_LEAVE':
         this.emit('host-leave', packet);
