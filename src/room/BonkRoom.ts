@@ -167,13 +167,21 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
   /** Muda o nome da sala em runtime. Fire-and-forget (D-09 Fase 3). */
   setRoomName(name: string): void {
     this.desiredState.roomName = name;
-    this.transport?.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_NAME, { newName: name });
+    if (!this.transport) {
+      this.logger.warn({ name }, 'setRoomName: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_NAME, { newName: name });
   }
 
   /** Muda a senha da sala em runtime. Fire-and-forget (D-10 Fase 3). */
   setRoomPassword(password: string): void {
     this.desiredState.password = password;
-    this.transport?.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_PASSWORD, { newPass: password });
+    if (!this.transport) {
+      this.logger.warn('setRoomPassword: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_PASSWORD, { newPass: password });
   }
 
   // ─── Listeners do transport ────────────────────────────────────────────────
@@ -395,11 +403,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
    */
   private scheduleRebuild(): void {
     if (this.reconnectAttempts >= this.reconnectPolicy.maxAttempts) {
-      // Exauriu tentativas — não emite segundo room-dead (room-dead já foi emitido)
       this.logger.warn(
         { attempts: this.reconnectAttempts, max: this.reconnectPolicy.maxAttempts },
         'max retry attempts reached — not retrying',
       );
+      this.emit('room-dead', {
+        kind: 'max-retries-exceeded',
+        attempts: this.reconnectAttempts,
+      });
       return;
     }
 
