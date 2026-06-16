@@ -4,9 +4,6 @@
 // Padrões mapeados em 01-RESEARCH.md (Pattern 1/3/4, Q8). Referência: BonkBot/src/bot.js.
 
 import io from 'socket.io-client';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as tls from 'node:tls';
 import pino from 'pino';
 import type { Logger } from 'pino';
@@ -24,22 +21,8 @@ const ANTI_IDLE_INTERVAL_MS = 29 * 60 * 1000;
 const ANTI_IDLE_TOGGLE_DELAY_MS = 500;
 const CHANGE_OWN_TEAM_PACKET = 6; // teams: 0=spec, 1=ffa, 2=red, 3=blue, 4=green, 5=yellow
 
-/**
- * Resolve o cert PEM default relativo ao módulo atual.
- * No bundle dist achatado (`dist/index.js`), `path.dirname(fileURLToPath(import.meta.url))`
- * aponta para `packages/core/dist`, e o cert está um nível acima em `packages/core/certs`
- * → `'../certs/...'`. Quando o módulo roda do source (`src/transport/`), são dois níveis de
- * subida (`src/transport` → `packages/core`) → `'../../certs/...'`. Tenta o caminho do dist
- * primeiro e cai no do source se ausente, evitando ENOENT em ambos os contextos (CR-03).
- */
-function resolveDefaultCertPath(): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const distPath = path.join(here, '../certs/bonk_fullchain.pem');
-  if (fs.existsSync(distPath)) {
-    return distPath;
-  }
-  return path.join(here, '../../certs/bonk_fullchain.pem');
-}
+// KI-01: bonk.io migrou para Google Trust Services (2026). tls.rootCertificates cobre GTS.
+// PEM Sectigo (bonk_fullchain.pem) removido da Abordagem 1 — mantém apenas tls.rootCertificates.
 
 export class BonkTransport {
   private socket: Socket | null = null;
@@ -89,8 +72,8 @@ export class BonkTransport {
 
   /**
    * Conecta ao bonk.io via socket.io-client@2 com transports: ['websocket'] (EIO=3, CONN-01).
-   * Estratégia de duas tentativas TLS (Pattern 1 RESEARCH.md):
-   *   1. opts.ca = bonk_fullchain.pem + rejectUnauthorized:true (Q2 — preferida)
+   * Estratégia de duas tentativas TLS (KI-01 resolved — bonk.io migrou para Google Trust Services):
+   *   1. ca: tls.rootCertificates + rejectUnauthorized:true — cobre GTS sem PEM Sectigo (KI-01)
    *   2. fallback rejectUnauthorized:false ESCOPADO ao socket (D-01) se houver erro de cert
    */
   async connect(): Promise<void> {
@@ -99,7 +82,6 @@ export class BonkTransport {
     }
     this.state = 'connecting';
 
-    const certPath = this.opts.certPath ?? resolveDefaultCertPath();
     const url = `https://${this.opts.server.server}.bonk.io`;
     const baseOpts = {
       transports: ['websocket'] as string[],
@@ -139,11 +121,11 @@ export class BonkTransport {
         });
       };
 
-      // Abordagem 1: CA customizado + trust store padrão + rejectUnauthorized:true.
-      // Usa array para não substituir o store padrão — cobre rotações de CA do bonk.io.
+      // KI-01: Abordagem 1 usa tls.rootCertificates (inclui Google Trust Services via store do sistema).
+      // PEM Sectigo (bonk_fullchain.pem) removido — inútil após migração bonk.io → GTS (2026).
       const primary = io(url, {
         ...baseOpts,
-        ca: [fs.readFileSync(certPath).toString(), ...tls.rootCertificates],
+        ca: tls.rootCertificates,
         rejectUnauthorized: true,
       });
       attachHandlers(primary, true);

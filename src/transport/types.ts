@@ -9,7 +9,7 @@ export type { AuthOptions, ServerInfo } from '../auth/types.js';
 
 /**
  * Abordagem TLS em uso na conexão WebSocket (D-01/D-02).
- * - `ca`: CA Sectigo customizado + rejectUnauthorized:true (tentativa preferida, Q2 RESEARCH.md)
+ * - `ca`: tls.rootCertificates + rejectUnauthorized:true (tentativa preferida — KI-01: GTS)
  * - `reject-unauthorized-false`: fallback escopado ao socket — NUNCA global (D-01)
  */
 export type TlsMode = 'ca' | 'reject-unauthorized-false';
@@ -29,6 +29,10 @@ export interface BonkTransportOptions {
   auth: AuthOptions;
   protocolVersion?: number;
   logger?: Logger;
-  /** Caminho para a cadeia Sectigo PEM. Default: certs/bonk_fullchain.pem do pacote. */
+  /**
+   * @deprecated KI-01: bonk.io migrou para Google Trust Services (2026).
+   * tls.rootCertificates cobre GTS — PEM Sectigo não é mais necessário.
+   * Este campo é ignorado desde Phase 2. Será removido em Phase 3.
+   */
   certPath?: string;
 }
