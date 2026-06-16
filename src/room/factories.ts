@@ -52,7 +52,7 @@ function pendingRoomEvent<K extends keyof BonkRoomEvents>(
   event: K,
   timeoutMs: number,
   timeoutError: Error,
-): { wait: () => Promise<void> } {
+): { wait: () => Promise<void>; cancel: () => void } {
   let fired = false;
   let onFire: (() => void) | null = null;
 
@@ -62,7 +62,12 @@ function pendingRoomEvent<K extends keyof BonkRoomEvents>(
   };
   room.once(event, handler as Parameters<BonkRoom['once']>[1]);
 
+  const cancel = (): void => {
+    room.off(event, handler as Parameters<BonkRoom['off']>[1]);
+  };
+
   return {
+    cancel,
     wait(): Promise<void> {
       return new Promise<void>((resolve, reject) => {
         if (fired) {
@@ -70,7 +75,7 @@ function pendingRoomEvent<K extends keyof BonkRoomEvents>(
           return;
         }
         const timer = setTimeout(() => {
-          room.off(event, handler as Parameters<BonkRoom['off']>[1]);
+          cancel();
           reject(timeoutError);
         }, timeoutMs);
         onFire = (): void => {
