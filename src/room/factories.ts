@@ -35,28 +35,51 @@ function parseRoomUrl(url: string): { roomId: string; bypass: string } | null {
 }
 
 /**
- * Aguarda um evento do BonkRoom com timeout. Registrado ANTES de connect() para
- * não perder eventos emitidos sincronamente durante a conexão (relevante para
- * transports injetados em testes que disparam packets dentro de connect()).
- * Limpa o timer e o listener em ambos os caminhos (sem leak — T-3-03-03).
+ * Aguarda um evento do BonkRoom com timeout.
+ *
+ * Duas fases para evitar duas armadilhas simultâneas:
+ *  1. O listener `once` é registrado SINCRONAMENTE (antes de connect()) para não
+ *     perder eventos emitidos durante a conexão (transport injetado dispara o
+ *     packet dentro de connect()).
+ *  2. A Promise (e o timer de timeout) só é criada/observada quando o caller
+ *     chama `.wait()` — e o timer é armado nesse momento, com o handler de
+ *     rejeição já anexado, evitando unhandled-rejection transitória.
+ *
+ * Limpa timer e listener em ambos os caminhos (sem leak — T-3-03-03).
  */
-function waitForRoomEvent<K extends keyof BonkRoomEvents>(
+function pendingRoomEvent<K extends keyof BonkRoomEvents>(
   room: BonkRoom,
   event: K,
   timeoutMs: number,
   timeoutError: Error,
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const handler = (): void => {
-      clearTimeout(timer);
-      resolve();
-    };
-    const timer = setTimeout(() => {
-      room.off(event, handler as Parameters<BonkRoom['off']>[1]);
-      reject(timeoutError);
-    }, timeoutMs);
-    room.once(event, handler as Parameters<BonkRoom['once']>[1]);
-  });
+): { wait: () => Promise<void> } {
+  let fired = false;
+  let onFire: (() => void) | null = null;
+
+  const handler = (): void => {
+    fired = true;
+    onFire?.();
+  };
+  room.once(event, handler as Parameters<BonkRoom['once']>[1]);
+
+  return {
+    wait(): Promise<void> {
+      return new Promise<void>((resolve, reject) => {
+        if (fired) {
+          resolve();
+          return;
+        }
+        const timer = setTimeout(() => {
+          room.off(event, handler as Parameters<BonkRoom['off']>[1]);
+          reject(timeoutError);
+        }, timeoutMs);
+        onFire = (): void => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+    },
+  };
 }
 
 /**
@@ -116,7 +139,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
 
     // Registrar listener ANTES de connect (evita perder packet 49 disparado
     // sincronamente durante connect() — caso do transport mock dos testes).
-    const shareLinkPromise = waitForRoomEvent(
+    const shareLinkPending = pendingRoomEvent(
       room,
       'share-link',
       timeoutMs,
@@ -146,7 +169,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
       avatar: DEFAULT_AVATAR,
     });
 
-    await shareLinkPromise;
+    await shareLinkPending.wait();
     return room;
   } catch (err) {
     room?.disconnect();
@@ -241,7 +264,7 @@ export async function joinRoom(
 
     // Registrar listener ANTES de connect (evita perder packet 3 disparado
     // sincronamente durante connect() — caso do transport mock dos testes).
-    const roomJoinPromise = waitForRoomEvent(
+    const roomJoinPending = pendingRoomEvent(
       room,
       'room-join',
       timeoutMs,
@@ -263,7 +286,7 @@ export async function joinRoom(
       roomPassword: password,
     });
 
-    await roomJoinPromise;
+    await roomJoinPending.wait();
     return room;
   } catch (err) {
     room?.disconnect();

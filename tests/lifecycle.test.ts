@@ -95,11 +95,19 @@ describe('createRoom — RoomCreationTimeoutError (D-04)', () => {
     };
 
     const promise = createRoom({ ...options, transport });
+    // Anexar o handler de rejeição ANTES de avançar os timers, evitando uma
+    // janela de unhandled-rejection transitória entre o disparo do timeout e o
+    // assert. promise é consumida uma única vez aqui.
+    const assertion = expect(promise).rejects.toThrowError(RoomCreationTimeoutError);
     // avançar timers para disparar o timeout
     await vi.advanceTimersByTimeAsync(60);
+    await assertion;
 
-    await expect(promise).rejects.toThrowError(RoomCreationTimeoutError);
-    await expect(promise).rejects.toHaveProperty('name', 'RoomCreationTimeoutError');
+    await expect(
+      promise.catch((e: unknown) => {
+        throw e;
+      }),
+    ).rejects.toHaveProperty('name', 'RoomCreationTimeoutError');
   });
 });
 
@@ -183,5 +191,33 @@ describe('BonkRoom.setRoomPassword — fire-and-forget (D-10)', () => {
 
     expect(transport.sendPacket).toHaveBeenCalledWith(53, { newPass: 'senha123' });
     expect(room['desiredState'].password).toBe('senha123');
+  });
+});
+
+// ─── Stub ROOM-04: reconnectPolicy wired à API pública (room-dead após desconexão) ──
+
+describe('BonkRoom — reconnectPolicy wired (ROOM-04)', () => {
+  it('emite room-dead após desconexão simulada com reconnectPolicy aplicado', async () => {
+    const transport = makeMockTransport();
+    const room = new BonkRoom({
+      desiredState: { ...DESIRED_STATE_FIXTURE },
+      logger: SILENT_LOGGER,
+      transport,
+      // Política passada via API pública (mesmo wiring de CreateRoomOptions.reconnectPolicy)
+      reconnectPolicy: { maxAttempts: 1, initialDelayMs: 50 },
+    });
+
+    await room.connect();
+
+    // room.once('room-dead') deve disparar quando o transport desconecta
+    const deadPromise = new Promise<unknown>((resolve) => {
+      room.once('room-dead', (reason) => resolve(reason));
+    });
+
+    // Simular desconexão do transport (caminho transitório → scheduleRebuild)
+    room['handleTransportDisconnect']('test disconnect');
+
+    const reason = (await deadPromise) as { kind: string };
+    expect(reason.kind).toBe('socket-disconnect');
   });
 });
