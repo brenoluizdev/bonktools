@@ -460,6 +460,8 @@ export interface JoinRoomPayload {
   token?: string;
   guestName?: string;
   roomPassword?: string;
+  /** Team ao entrar: 0=espectador, 1=host/ffa. Omitir = default do servidor. */
+  team?: number;
 }
 
 export interface SetRoomNamePayload {

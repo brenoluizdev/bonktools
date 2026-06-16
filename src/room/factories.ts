@@ -11,7 +11,7 @@
 
 import { BonkRoom } from './BonkRoom.js';
 import { AuthClient } from '../auth/AuthClient.js';
-import { OUTGOING_PACKET_IDS } from '../codec/packets.js';
+import { encodeCreateRoom, encodeJoinRoom } from '../codec/encode.js';
 import type { CreateRoomOptions, JoinRoomOptions, ResolvedRoomAddress, BonkRoomEvents } from './types.js';
 import { RoomCreationTimeoutError, RoomJoinTimeoutError } from './types.js';
 import type { BonkTransportOptions } from '../transport/types.js';
@@ -153,7 +153,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
 
     await room.connect();
 
-    room.sendPacket(OUTGOING_PACKET_IDS.CREATE_ROOM, {
+    const [createEventId, createPayload] = encodeCreateRoom({
       peerID,
       roomName: desiredState.roomName,
       maxPlayers: desiredState.maxPlayers ?? 6,
@@ -173,6 +173,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
       guestName,
       avatar: DEFAULT_AVATAR,
     });
+    room.sendPacket(createEventId, createPayload);
 
     await shareLinkPending.wait();
     return room;
@@ -241,8 +242,8 @@ export async function joinRoom(
 
   const peerID = authClient.generatePeerID();
 
-  // role é wiring de team intencional: spectator=0, host/ffa=1 (referenciado no payload).
-  void role;
+  // role → team: spectator=0, host/ffa=1 (campo opcional no JOIN_ROOM payload)
+  const team = role === 'spectator' ? 0 : 1;
 
   // ── Construir BonkRoom ─────────────────────────────────────────────────────
   const desiredState = {
@@ -278,7 +279,7 @@ export async function joinRoom(
 
     await room.connect();
 
-    room.sendPacket(OUTGOING_PACKET_IDS.JOIN_ROOM, {
+    const [joinEventId, joinPayload] = encodeJoinRoom({
       joinID: joinId,
       avatar: DEFAULT_AVATAR,
       guest: auth.type === 'guest',
@@ -289,7 +290,9 @@ export async function joinRoom(
       token: token ?? undefined,
       guestName,
       roomPassword: password,
+      team,
     });
+    room.sendPacket(joinEventId, joinPayload);
 
     await roomJoinPending.wait();
     return room;

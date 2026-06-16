@@ -407,10 +407,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         { attempts: this.reconnectAttempts, max: this.reconnectPolicy.maxAttempts },
         'max retry attempts reached — not retrying',
       );
-      this.emit('room-dead', {
-        kind: 'max-retries-exceeded',
-        attempts: this.reconnectAttempts,
-      });
+      // Emitir max-retries-exceeded apenas quando já houve ao menos uma tentativa,
+      // para distinguir de maxAttempts:0 (sem retry) onde room-dead já foi emitido.
+      if (this.reconnectAttempts > 0) {
+        this.emit('room-dead', {
+          kind: 'max-retries-exceeded',
+          attempts: this.reconnectAttempts,
+        });
+      }
       return;
     }
 
