@@ -151,12 +151,13 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     timeoutError: Error,
   ): Promise<BonkRoomEvents[K][0]> {
     return new Promise<BonkRoomEvents[K][0]>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+        timer = null;
         this.off(event, handler as Parameters<typeof this.off>[1]);
         reject(timeoutError);
       }, timeoutMs);
       const handler = (arg: BonkRoomEvents[K][0]): void => {
-        clearTimeout(timer);
+        if (timer !== null) { clearTimeout(timer); timer = null; }
         resolve(arg);
       };
       this.once(event, handler as Parameters<typeof this.once>[1]);
