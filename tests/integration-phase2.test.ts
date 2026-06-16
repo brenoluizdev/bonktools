@@ -27,10 +27,11 @@ integration('BonkRoom — integração ao vivo (BONK_INTEGRATION)', () => {
         desiredState: {
           roomName: 'BonkTools Integration Test',
           password: '',
+          maxPlayers: 8,
           mode: 0,
           rounds: 3,
         },
-        transport: { server, auth: { type: 'registered', token } },
+        transportOptions: { server, auth: { type: 'registered', token } },
       });
 
       await new Promise<void>((resolve, reject) => {
