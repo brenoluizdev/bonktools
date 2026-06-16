@@ -9,11 +9,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as tls from 'node:tls';
 import type { Logger } from 'pino';
-import type { LoginResponse, ServerInfo } from './types.js';
+import type { LoginResponse, ServerInfo, AutoJoinResponse } from './types.js';
 
 // URLs exatas do bonk.io (BonkBot/src/utils/constants.js).
 const LOGIN_URL = 'https://bonk2.io/scripts/login_legacy.php';
 const GET_ROOMS_URL = 'https://bonk2.io/scripts/getrooms.php';
+const AUTOJOIN_URL = 'https://bonk2.io/scripts/autojoin.php';
 
 // Resposta crua de getrooms.php (createserver -> server no mapeamento).
 interface GetRoomsResponse {
@@ -127,5 +128,29 @@ export class AuthClient {
    */
   generatePeerID(): string {
     return Math.random().toString(36).substring(2, 12) + 'v00000';
+  }
+
+  /**
+   * Resolve o servidor de uma sala via autojoin.php.
+   * Usado por joinRoom(url: string) para obter o endereço do servidor.
+   * @param roomId ID numérico da sala (6 dígitos, extraído da URL bonk.io/<roomId><bypass>)
+   */
+  async autoJoin(roomId: string): Promise<AutoJoinResponse> {
+    const body = new URLSearchParams({ joinID: roomId });
+
+    const response = await undiciFetch(AUTOJOIN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+      dispatcher: this.httpsAgent,
+    });
+
+    const data = (await response.json()) as AutoJoinResponse;
+
+    if (data.r !== 'success') {
+      throw new Error(`autojoin.php: r=${String(data.r)} — sala não encontrada ou erro de servidor`);
+    }
+
+    return data;
   }
 }
