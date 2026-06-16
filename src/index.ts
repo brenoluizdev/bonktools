@@ -26,6 +26,7 @@ export { encodeTimesync } from './codec/encode.js';
 export { INCOMING_PACKET_IDS, OUTGOING_PACKET_IDS, TERMINAL_STATUS_CODES, RATE_LIMIT_CODES } from './codec/packets.js';
 export type {
   TimesyncRequest,
+  TimesyncPacket,
   TimesyncResponse,
   StatusMessage,
   ShareLink,
