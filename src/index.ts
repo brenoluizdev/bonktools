@@ -77,3 +77,25 @@ export { createEmptyRoomState } from './room/RoomState.js';
 export type { RoomState, PlayerData } from './room/RoomState.js';
 export { computeBackoff, defaultReconnectPolicy } from './room/ReconnectPolicy.js';
 export type { ReconnectPolicy, ReconnectPolicyOptions } from './room/ReconnectPolicy.js';
+
+// Room Lifecycle — Phase 3
+export { createRoom, joinRoom } from './room/factories.js';
+export type {
+  CreateRoomOptions,
+  JoinRoomOptions,
+  ResolvedRoomAddress,
+} from './room/types.js';
+export { RoomCreationTimeoutError, RoomJoinTimeoutError } from './room/types.js';
+export {
+  encodeCreateRoom,
+  encodeJoinRoom,
+  encodeSetRoomName,
+  encodeSetRoomPassword,
+} from './codec/encode.js';
+export type {
+  CreateRoomPayload,
+  JoinRoomPayload,
+  SetRoomNamePayload,
+  SetRoomPasswordPayload,
+} from './codec/packets.js';
+export type { AutoJoinResponse } from './auth/types.js';
