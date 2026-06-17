@@ -246,18 +246,48 @@ describe('Phase 4 — Game Flow & Moderation', () => {
   });
 
   describe('GAME-03: setMode', () => {
-    it.todo('envia packet 20 com {ga: engine, mo: mode}');
-    it.todo('atualiza desiredState.engine e desiredState.mode mesmo offline (D-10)');
+    it('envia packet 20 com {ga: engine, mo: mode}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setMode('f', 'f');
+      expect(transport.sendPacket).toHaveBeenCalledWith(20, { ga: 'f', mo: 'f' });
+    });
+    it('atualiza desiredState.engine e desiredState.mode mesmo offline (D-10)', () => {
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, logger: SILENT_LOGGER });
+      room.setMode('f', 'ar');
+      expect(room['desiredState'].engine).toBe('f');
+      expect(room['desiredState'].mode).toBe('ar');
+    });
   });
 
   describe('GAME-04: setRounds', () => {
-    it.todo('envia packet 21 com {w: n}');
-    it.todo('atualiza desiredState.rounds mesmo offline (D-10)');
+    it('envia packet 21 com {w: n}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setRounds(5);
+      expect(transport.sendPacket).toHaveBeenCalledWith(21, { w: 5 });
+    });
+    it('atualiza desiredState.rounds mesmo offline (D-10)', () => {
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, logger: SILENT_LOGGER });
+      room.setRounds(7);
+      expect(room['desiredState'].rounds).toBe(7);
+    });
   });
 
   describe('GAME-05: setMap', () => {
-    it.todo('envia packet 22 (SEND_MAP_DELETE) seguido de packet 23 (SEND_MAP_ADD) com {m: mapData}');
-    it.todo('atualiza desiredState.map mesmo offline (D-10)');
+    it('envia packet 22 (SEND_MAP_DELETE) seguido de packet 23 (SEND_MAP_ADD) com {m: mapData}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setMap('MAPA_LZ_BLOB');
+      expect(transport.sendPacket).toHaveBeenCalledTimes(2);
+      expect(transport.sendPacket.mock.calls[0][0]).toBe(22);
+      expect(transport.sendPacket.mock.calls[1]).toEqual([23, { m: 'MAPA_LZ_BLOB' }]);
+    });
+    it('atualiza desiredState.map mesmo offline (D-10)', () => {
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, logger: SILENT_LOGGER });
+      room.setMap('MAPA_LZ_BLOB');
+      expect(room['desiredState'].map).toBe('MAPA_LZ_BLOB');
+    });
   });
 
   describe('GAME-06: countdowns', () => {
@@ -284,25 +314,93 @@ describe('Phase 4 — Game Flow & Moderation', () => {
   });
 
   describe('MOD-02: kick e ban', () => {
-    it.todo('kickPlayer(6) envia packet 9 com {banshortid: 6, kickonly: true}');
-    it.todo('banPlayer(6) envia packet 9 com {banshortid: 6} sem campo kickonly');
+    it('kickPlayer(6) envia packet 9 com {banshortid: 6, kickonly: true}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.kickPlayer(6);
+      expect(transport.sendPacket).toHaveBeenCalledWith(9, { banshortid: 6, kickonly: true });
+    });
+    it('banPlayer(6) envia packet 9 com {banshortid: 6} sem campo kickonly', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.banPlayer(6);
+      const [id, payload] = transport.sendPacket.mock.calls[0] as [number, Record<string, unknown>];
+      expect(id).toBe(9);
+      expect(payload).toEqual({ banshortid: 6 });
+      expect(payload).not.toHaveProperty('kickonly');
+    });
   });
 
   describe('MOD-03: chat e echo filter', () => {
-    it.todo('chat(msg) envia packet 10 com {message: msg}');
-    it.todo('chat-message NÃO é emitido quando packet.id === _state.myId (D-07 echo filter)');
-    it.todo('chat-message É emitido quando packet.id !== _state.myId');
+    it('chat(msg) envia packet 10 com {message: msg}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.chat('hello');
+      expect(transport.sendPacket).toHaveBeenCalledWith(10, { message: 'hello' });
+    });
+    it('chat-message NÃO é emitido quando packet.id === _state.myId (D-07 echo filter)', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room['_state'].myId = 42;
+      const received: unknown[] = [];
+      room.on('chat-message', (p) => received.push(p));
+      // packet 20 = CHAT_MESSAGE incoming: args são (id, message)
+      room['handleIncomingPacket']([20, 42, 'hi']);
+      expect(received).toHaveLength(0);
+    });
+    it('chat-message É emitido quando packet.id !== _state.myId', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room['_state'].myId = 42;
+      const received: unknown[] = [];
+      room.on('chat-message', (p) => received.push(p));
+      room['handleIncomingPacket']([20, 99, 'hello']);
+      expect(received).toHaveLength(1);
+    });
   });
 
   describe('MOD-04: teams', () => {
-    it.todo('setTeam(3, 2) envia packet 26 com {targetID: 3, targetTeam: 2}');
-    it.todo('setTeamLock(true) envia packet 7 com {teamLock: true}');
-    it.todo('setTeamsEnabled(false) envia packet 32 com {t: false}');
+    it('setTeam(3, 2) envia packet 26 com {targetID: 3, targetTeam: 2}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setTeam(3, 2);
+      expect(transport.sendPacket).toHaveBeenCalledWith(26, { targetID: 3, targetTeam: 2 });
+    });
+    it('setTeamLock(true) envia packet 7 com {teamLock: true}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setTeamLock(true);
+      expect(transport.sendPacket).toHaveBeenCalledWith(7, { teamLock: true });
+    });
+    it('setTeamsEnabled(false) envia packet 32 com {t: false}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setTeamsEnabled(false);
+      expect(transport.sendPacket).toHaveBeenCalledWith(32, { t: false });
+    });
   });
 
   describe('MOD-05: host control', () => {
-    it.todo('giveHost(5) envia packet 34 com {id: 5}');
-    it.todo('setNoHostSwap(true) envia packet 50 sem payload');
-    it.todo('setNoHostSwap(false) NÃO envia packet — loga warn');
+    it('giveHost(5) envia packet 34 com {id: 5}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.giveHost(5);
+      expect(transport.sendPacket).toHaveBeenCalledWith(34, { id: 5 });
+    });
+    it('setNoHostSwap(true) envia packet 50 sem payload', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.setNoHostSwap(true);
+      expect(transport.sendPacket).toHaveBeenCalledWith(50, undefined);
+    });
+    it('setNoHostSwap(false) NÃO envia packet — loga warn', () => {
+      const logger = pino({ level: 'silent' });
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger });
+      room.setNoHostSwap(false);
+      expect(transport.sendPacket).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalled();
+    });
   });
 });

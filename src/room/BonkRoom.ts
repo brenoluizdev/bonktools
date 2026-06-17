@@ -233,6 +233,123 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_ABORT_COUNTDOWN, undefined);
   }
 
+  // ─── Phase 4 — Configuração de Partida (D-10) ────────────────────────────
+
+  /** Muda o modo de jogo. Atualiza desiredState antes do transport guard (D-10). */
+  setMode(engine: string, mode: string): void {
+    this.desiredState.engine = engine;
+    this.desiredState.mode = mode;
+    if (!this.transport) {
+      this.logger.warn({ engine, mode }, 'setMode: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_MODE, { ga: engine, mo: mode });
+  }
+
+  /** Define o número de rounds. Atualiza desiredState antes do transport guard (D-10). */
+  setRounds(n: number): void {
+    this.desiredState.rounds = n;
+    if (!this.transport) {
+      this.logger.warn({ rounds: n }, 'setRounds: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_ROUNDS, { w: n });
+  }
+
+  /** Substitui o mapa ativo. Sequência: SEND_MAP_DELETE (22) + SEND_MAP_ADD (23). Atualiza desiredState (D-10). */
+  setMap(mapData: string): void {
+    this.desiredState.map = mapData;
+    if (!this.transport) {
+      this.logger.warn({ mapLen: mapData.length }, 'setMap: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_MAP_DELETE, { d: 0 });
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_MAP_ADD, { m: mapData });
+  }
+
+  // ─── Phase 4 — Moderação ─────────────────────────────────────────────────
+
+  /** Envia mensagem de chat (packet 10). Fire-and-forget. */
+  chat(message: string): void {
+    if (!this.transport) {
+      this.logger.warn({}, 'chat: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.CHAT_MESSAGE, { message });
+  }
+
+  /** Kick de jogador sem ban (packet 9 com kickonly: true). */
+  kickPlayer(id: number): void {
+    if (!this.transport) {
+      this.logger.warn({ id }, 'kickPlayer: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.KICK_BAN_PLAYER, { banshortid: id, kickonly: true as const });
+  }
+
+  /** Ban de jogador (packet 9). CRÍTICO: omitir campo kickonly — não passar kickonly: false. */
+  banPlayer(id: number): void {
+    if (!this.transport) {
+      this.logger.warn({ id }, 'banPlayer: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.KICK_BAN_PLAYER, { banshortid: id });
+  }
+
+  // ─── Phase 4 — Times e Host ───────────────────────────────────────────────
+
+  /** Move jogador para um time (packet 26). team: 0=spec 1=ffa 2=red 3=blue 4=green 5=yellow. */
+  setTeam(id: number, team: number): void {
+    if (!this.transport) {
+      this.logger.warn({ id, team }, 'setTeam: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.CHANGE_OTHER_TEAM_OTHER, { targetID: id, targetTeam: team });
+  }
+
+  /** Bloqueia ou desbloqueia times (packet 7). */
+  setTeamLock(locked: boolean): void {
+    if (!this.transport) {
+      this.logger.warn({ locked }, 'setTeamLock: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.TEAM_LOCK, { teamLock: locked });
+  }
+
+  /** Habilita ou desabilita times (packet 32). */
+  setTeamsEnabled(enabled: boolean): void {
+    if (!this.transport) {
+      this.logger.warn({ enabled }, 'setTeamsEnabled: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_TEAM_SETTINGS, { t: enabled });
+  }
+
+  /** Transfere host para outro jogador (packet 34). */
+  giveHost(id: number): void {
+    if (!this.transport) {
+      this.logger.warn({ id }, 'giveHost: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_HOST_CHANGE, { id });
+  }
+
+  /**
+   * Desabilita troca automática de host (packet 50).
+   * setNoHostSwap(false): sem packet de desativação no protocolo bonk.io — loga warn e ignora.
+   */
+  setNoHostSwap(enabled: boolean): void {
+    if (!enabled) {
+      this.logger.warn({ enabled }, 'setNoHostSwap(false): sem packet de desativação no protocolo bonk.io — chamada ignorada');
+      return;
+    }
+    if (!this.transport) {
+      this.logger.warn({}, 'setNoHostSwap: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_NO_HOST_SWAP, undefined);
+  }
+
   // ─── Listeners do transport ────────────────────────────────────────────────
 
   private attachTransportListeners(transport: TransportLike): void {
@@ -366,6 +483,8 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         break;
 
       case 'CHAT_MESSAGE':
+        // D-07: echo filter — null === number é sempre false (seguro antes do join)
+        if (packet.id === this._state.myId) break;
         this.emit('chat-message', packet);
         break;
 

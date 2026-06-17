@@ -22,7 +22,7 @@ export type {
 
 // Codec
 export { decode, decodeWithZod } from './codec/decode.js';
-export { encodeTimesync } from './codec/encode.js';
+export { encodeTimesync, encodeStartGame } from './codec/encode.js';
 export { INCOMING_PACKET_IDS, OUTGOING_PACKET_IDS, TERMINAL_STATUS_CODES, RATE_LIMIT_CODES } from './codec/packets.js';
 export type {
   TimesyncRequest,
@@ -97,5 +97,19 @@ export type {
   JoinRoomPayload,
   SetRoomNamePayload,
   SetRoomPasswordPayload,
+  // Phase 4 payload types
+  GameSettings,
+  StartGamePayload,
+  StartGameOptions,
+  KickBanPayload,
+  ChatMessagePayload,
+  SendModePayload,
+  SendRoundsPayload,
+  SendMapAddPayload,
+  ChangeOtherTeamPayload,
+  TeamLockPayload,
+  SendTeamSettingsPayload,
+  SendHostChangePayload,
+  StartCountdownPayload,
 } from './codec/packets.js';
 export type { AutoJoinResponse } from './auth/types.js';
