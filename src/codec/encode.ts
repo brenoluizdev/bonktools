@@ -68,7 +68,7 @@ export function encodeStartGame(
     tea: false,
     ga: state.engine ?? 'b',
     mo: String(state.mode || 'b'),
-    bal: [] as unknown[],
+    bal: {} as Record<number, number>,
     ...(opts?.gs ?? {}),
   };
   return { is: opts?.is ?? '', gs };
