@@ -137,8 +137,15 @@ export class AuthClient {
    * não chamada HTTP). 10 chars base36 + sufixo 'v00000'.
    */
   generatePeerID(): string {
-    // 6 bytes = 48 bits de entropia, hex = 12 chars, nunca vazio (seguro vs Math.random)
-    return randomBytes(6).toString('hex') + 'v00000';
+    // Formato derivado de Packets.md exemplo: 10 chars base36 + 'a00000' (total 16 chars)
+    // Ex: "vuzvugdrnja00000" — o servidor valida tamanho e charset.
+    const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
+    const bytes = randomBytes(10);
+    let rand = '';
+    for (const b of bytes) {
+      rand += chars[b % 36];
+    }
+    return rand + 'a00000';
   }
 
   /**

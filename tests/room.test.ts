@@ -201,14 +201,48 @@ describe('BonkRoom — logger pino warn em zod failure (OBS-03)', () => {
 
 describe('Phase 4 — Game Flow & Moderation', () => {
   describe('GAME-01: startGame', () => {
-    it.todo('envia packet 5 (TRIGGER_START) com is e gs ao chamar startGame()');
-    it.todo('usa DEFAULT_IS_BLOB quando opts.is omitido');
-    it.todo('não envia packet se transport não conectado — loga warn');
+    it('envia packet 5 (TRIGGER_START) com is e gs ao chamar startGame()', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.startGame();
+      expect(transport.sendPacket).toHaveBeenCalledOnce();
+      const [id, payload] = transport.sendPacket.mock.calls[0] as [number, unknown];
+      expect(id).toBe(5);
+      expect(payload).toMatchObject({ is: expect.any(String), gs: expect.objectContaining({ gt: 2, ga: 'b', mo: expect.any(String) }) });
+    });
+
+    it('usa is="" quando opts.is omitido (spike confirmou: servidor aceita string vazia)', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.startGame();
+      const [, payload] = transport.sendPacket.mock.calls[0] as [number, { is: string }];
+      expect(payload.is).toBe('');
+    });
+
+    it('não envia packet se transport não conectado — loga warn', () => {
+      const logger = pino({ level: 'silent' });
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, logger });
+      room.startGame();
+      expect(warnSpy).toHaveBeenCalled();
+    });
   });
 
   describe('GAME-02: stopGame', () => {
-    it.todo('envia packet 14 (RETURN_TO_LOBBY) sem payload ao chamar stopGame()');
-    it.todo('não envia packet se transport não conectado — loga warn');
+    it('envia packet 14 (RETURN_TO_LOBBY) sem payload ao chamar stopGame()', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.stopGame();
+      expect(transport.sendPacket).toHaveBeenCalledWith(14, undefined);
+    });
+
+    it('não envia packet se transport não conectado — loga warn', () => {
+      const logger = pino({ level: 'silent' });
+      const warnSpy = vi.spyOn(logger, 'warn');
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, logger });
+      room.stopGame();
+      expect(warnSpy).toHaveBeenCalled();
+    });
   });
 
   describe('GAME-03: setMode', () => {
@@ -227,9 +261,26 @@ describe('Phase 4 — Game Flow & Moderation', () => {
   });
 
   describe('GAME-06: countdowns', () => {
-    it.todo('startCountdown() envia packet 36 com {num: 3} quando num omitido');
-    it.todo('startCountdown(5) envia packet 36 com {num: 5}');
-    it.todo('abortCountdown() envia packet 37 sem payload');
+    it('startCountdown() envia packet 36 com {num: 3} quando num omitido', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.startCountdown();
+      expect(transport.sendPacket).toHaveBeenCalledWith(36, { num: 3 });
+    });
+
+    it('startCountdown(5) envia packet 36 com {num: 5}', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.startCountdown(5);
+      expect(transport.sendPacket).toHaveBeenCalledWith(36, { num: 5 });
+    });
+
+    it('abortCountdown() envia packet 37 sem payload', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.abortCountdown();
+      expect(transport.sendPacket).toHaveBeenCalledWith(37, undefined);
+    });
   });
 
   describe('MOD-02: kick e ban', () => {

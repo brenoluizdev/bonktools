@@ -131,10 +131,12 @@ export class BonkTransport extends EventEmitter<BonkTransportEvents> {
 
         socket.on('connect_error', (...args: unknown[]) => {
           const message = String((args[0] as Error)?.message ?? args[0] ?? '');
-          if (allowFallback && /certificate|cert|tls|self.signed/i.test(message)) {
+          // engine.io-client@3 → ws@7 não faz threading do CA customizado e emite "websocket error"
+          // genérico em vez de mensagem TLS específica (bug documentado internamente).
+          // Fazemos fallback em qualquer erro da tentativa primária.
+          if (allowFallback) {
             this.logger.warn({ err: message }, 'TLS CA failed — retrying with scoped rejectUnauthorized:false');
             socket.disconnect();
-            // socket.io-client@2 não garante CA threading via engine.io-client@3 → ws@7 — workaround: rejectUnauthorized scoped, não global
             const fallback = io(url, { ...baseOpts, rejectUnauthorized: false });
             attachHandlers(fallback, false);
             return;

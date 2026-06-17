@@ -99,6 +99,10 @@ export const GameEndSchema = z.object({
 export const GameStartSchema = z.object({
   type: z.literal('GAME_START'),
   timestamp: z.unknown(),
+  /** Blob de estado inicial LZ-compressed. Pode ser null (servidor envia null quando is='') */
+  is: z.string().nullable().optional(),
+  /** Game settings no momento do start. */
+  gs: z.unknown().optional(),
 });
 
 export const StatusMessageSchema = z.object({

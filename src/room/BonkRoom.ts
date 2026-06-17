@@ -9,6 +9,8 @@ import type { Logger } from 'pino';
 import { BonkTransport } from '../transport/BonkTransport.js';
 import { decodeWithZod } from '../codec/decode.js';
 import { TERMINAL_STATUS_CODES, OUTGOING_PACKET_IDS } from '../codec/packets.js';
+import type { StartGameOptions } from '../codec/packets.js';
+import { encodeStartGame } from '../codec/encode.js';
 import type { StatusCode, IncomingPacket, UnknownPacket } from '../codec/packets.js';
 import {
   createEmptyRoomState,
@@ -191,6 +193,44 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       return;
     }
     this.transport.sendPacket(OUTGOING_PACKET_IDS.SET_ROOM_PASSWORD, { newPass: password });
+  }
+
+  // ─── Phase 4 — Game Flow ──────────────────────────────────────────────────
+
+  /** Inicia a partida (packet 5). Spike confirmou: is='' aceito pelo servidor. */
+  startGame(opts?: StartGameOptions): void {
+    if (!this.transport) {
+      this.logger.warn({ opts }, 'startGame: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.TRIGGER_START, encodeStartGame(this.desiredState, opts));
+  }
+
+  /** Retorna todos ao lobby (packet 14). */
+  stopGame(): void {
+    if (!this.transport) {
+      this.logger.warn('stopGame: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.RETURN_TO_LOBBY, undefined);
+  }
+
+  /** Inicia countdown (packet 36). Default: 3 segundos. */
+  startCountdown(num?: number): void {
+    if (!this.transport) {
+      this.logger.warn({ num }, 'startCountdown: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_START_COUNTDOWN, { num: num ?? 3 });
+  }
+
+  /** Cancela countdown em andamento (packet 37). */
+  abortCountdown(): void {
+    if (!this.transport) {
+      this.logger.warn('abortCountdown: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_ABORT_COUNTDOWN, undefined);
   }
 
   // ─── Listeners do transport ────────────────────────────────────────────────

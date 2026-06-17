@@ -4,8 +4,11 @@ import type {
   JoinRoomPayload,
   SetRoomNamePayload,
   SetRoomPasswordPayload,
+  StartGamePayload,
+  StartGameOptions,
 } from './packets.js';
 import { OUTGOING_PACKET_IDS } from './packets.js';
+import type { DesiredRoomState } from '../room/types.js';
 
 // D-06: encode Phase 1 cobria APENAS packets de handshake/keep-alive.
 // Phase 3 adiciona os encoders de ciclo de vida (create/join/setters).
@@ -46,4 +49,27 @@ export function encodeSetRoomPassword(
   password: string,
 ): [typeof OUTGOING_PACKET_IDS.SET_ROOM_PASSWORD, SetRoomPasswordPayload] {
   return [OUTGOING_PACKET_IDS.SET_ROOM_PASSWORD, { newPass: password }];
+}
+
+/**
+ * Monta o payload do TRIGGER_START (outgoing 5) a partir de DesiredRoomState.
+ * Spike confirmou: is='' é aceito pelo servidor (bonk.io gera estado internamente).
+ */
+export function encodeStartGame(
+  state: DesiredRoomState,
+  opts?: StartGameOptions,
+): StartGamePayload {
+  const gs = {
+    map: state.map ?? '',
+    gt: 2,
+    wl: state.rounds,
+    q: false,
+    tl: false,
+    tea: false,
+    ga: state.engine ?? 'b',
+    mo: String(state.mode ?? 'b'),
+    bal: [] as unknown[],
+    ...(opts?.gs ?? {}),
+  };
+  return { is: opts?.is ?? '', gs };
 }

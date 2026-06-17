@@ -117,7 +117,7 @@ function buildRawObject(type: number, args: unknown[]): Record<string, unknown> 
       return { type: 'GAME_END' };
 
     case INCOMING_PACKET_IDS.GAME_START:
-      return { type: 'GAME_START', timestamp: args[0] };
+      return { type: 'GAME_START', timestamp: args[0], is: args[1], gs: args[2] };
 
     case INCOMING_PACKET_IDS.TEAMLOCK_TOGGLE:
       return { type: 'TEAMLOCK_TOGGLE', locked: args[0] };
