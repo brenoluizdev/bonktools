@@ -178,7 +178,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
       version: protocolVersion,
       hidden: hidden ? 1 : 0,
       quick,
-      mode: String(desiredState.mode ?? 'b'),
+      mode: String(desiredState.mode || 'b'),
       ...(token !== null ? { token } : {}),
       ...(guestName !== undefined ? { guestName } : {}),
       avatar: DEFAULT_AVATAR,
