@@ -134,16 +134,22 @@ export class AuthClient {
 
   /**
    * Gera um peerID localmente, seguindo BonkBot (Q8 Open Questions: geração local,
-   * não chamada HTTP). 10 chars base36 + sufixo 'v00000'.
+   * não chamada HTTP). 10 chars base36 + sufixo 'a00000'.
+   *
+   * Usa rejection sampling para distribuição uniforme base36 (W-05):
+   * 256 % 36 = 4 → bytes ≥ 252 são descartados, evitando bias em chars 0–3.
    */
   generatePeerID(): string {
     // Formato derivado de Packets.md exemplo: 10 chars base36 + 'a00000' (total 16 chars)
     // Ex: "vuzvugdrnja00000" — o servidor valida tamanho e charset.
     const chars = '0123456789abcdefghijklmnopqrstuvwxyz';
-    const bytes = randomBytes(10);
     let rand = '';
-    for (const b of bytes) {
-      rand += chars[b % 36];
+    while (rand.length < 10) {
+      const b = randomBytes(1)[0]!;
+      // rejection sampling: 256 % 36 = 4 → descartar b >= 252 (= 36 * 7) para distribuição uniforme
+      if (b < 252) {
+        rand += chars[b % 36];
+      }
     }
     return rand + 'a00000';
   }
