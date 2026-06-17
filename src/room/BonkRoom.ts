@@ -235,7 +235,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
   // ─── Phase 4 — Configuração de Partida (D-10) ────────────────────────────
 
-  /** Muda o modo de jogo. Atualiza desiredState antes do transport guard (D-10). */
+  /**
+   * Muda o modo de jogo. Atualiza desiredState antes do transport guard (D-10).
+   *
+   * **Contrato de desconexão:** se o transport estiver desconectado no momento da
+   * chamada, a mudança é aplicada apenas ao desiredState local — o packet é
+   * descartado silenciosamente. A configuração só será reenviada ao servidor na
+   * próxima chamada a `startGame()`, que re-aplica o desiredState completo.
+   */
   setMode(engine: string, mode: string): void {
     this.desiredState.engine = engine;
     this.desiredState.mode = mode;
@@ -246,7 +253,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_MODE, { ga: engine, mo: mode });
   }
 
-  /** Define o número de rounds. Atualiza desiredState antes do transport guard (D-10). */
+  /**
+   * Define o número de rounds. Atualiza desiredState antes do transport guard (D-10).
+   *
+   * **Contrato de desconexão:** se o transport estiver desconectado no momento da
+   * chamada, a mudança é aplicada apenas ao desiredState local — o packet é
+   * descartado silenciosamente. A configuração só será reenviada ao servidor na
+   * próxima chamada a `startGame()`, que re-aplica o desiredState completo.
+   */
   setRounds(n: number): void {
     this.desiredState.rounds = n;
     if (!this.transport) {
@@ -256,7 +270,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     this.transport.sendPacket(OUTGOING_PACKET_IDS.SEND_ROUNDS, { w: n });
   }
 
-  /** Substitui o mapa ativo. Sequência: SEND_MAP_DELETE (22) + SEND_MAP_ADD (23). Atualiza desiredState (D-10). */
+  /**
+   * Substitui o mapa ativo. Sequência: SEND_MAP_DELETE (22) + SEND_MAP_ADD (23). Atualiza desiredState (D-10).
+   *
+   * **Contrato de desconexão:** se o transport estiver desconectado no momento da
+   * chamada, a mudança é aplicada apenas ao desiredState local — os packets são
+   * descartados silenciosamente. A configuração só será reenviada ao servidor na
+   * próxima chamada a `startGame()`, que re-aplica o desiredState completo.
+   */
   setMap(mapData: string): void {
     this.desiredState.map = mapData;
     if (!this.transport) {
