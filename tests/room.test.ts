@@ -198,3 +198,60 @@ describe('BonkRoom — logger pino warn em zod failure (OBS-03)', () => {
     expect(warnSpy).toHaveBeenCalled();
   });
 });
+
+describe('Phase 4 — Game Flow & Moderation', () => {
+  describe('GAME-01: startGame', () => {
+    it.todo('envia packet 5 (TRIGGER_START) com is e gs ao chamar startGame()');
+    it.todo('usa DEFAULT_IS_BLOB quando opts.is omitido');
+    it.todo('não envia packet se transport não conectado — loga warn');
+  });
+
+  describe('GAME-02: stopGame', () => {
+    it.todo('envia packet 14 (RETURN_TO_LOBBY) sem payload ao chamar stopGame()');
+    it.todo('não envia packet se transport não conectado — loga warn');
+  });
+
+  describe('GAME-03: setMode', () => {
+    it.todo('envia packet 20 com {ga: engine, mo: mode}');
+    it.todo('atualiza desiredState.engine e desiredState.mode mesmo offline (D-10)');
+  });
+
+  describe('GAME-04: setRounds', () => {
+    it.todo('envia packet 21 com {w: n}');
+    it.todo('atualiza desiredState.rounds mesmo offline (D-10)');
+  });
+
+  describe('GAME-05: setMap', () => {
+    it.todo('envia packet 22 (SEND_MAP_DELETE) seguido de packet 23 (SEND_MAP_ADD) com {m: mapData}');
+    it.todo('atualiza desiredState.map mesmo offline (D-10)');
+  });
+
+  describe('GAME-06: countdowns', () => {
+    it.todo('startCountdown() envia packet 36 com {num: 3} quando num omitido');
+    it.todo('startCountdown(5) envia packet 36 com {num: 5}');
+    it.todo('abortCountdown() envia packet 37 sem payload');
+  });
+
+  describe('MOD-02: kick e ban', () => {
+    it.todo('kickPlayer(6) envia packet 9 com {banshortid: 6, kickonly: true}');
+    it.todo('banPlayer(6) envia packet 9 com {banshortid: 6} sem campo kickonly');
+  });
+
+  describe('MOD-03: chat e echo filter', () => {
+    it.todo('chat(msg) envia packet 10 com {message: msg}');
+    it.todo('chat-message NÃO é emitido quando packet.id === _state.myId (D-07 echo filter)');
+    it.todo('chat-message É emitido quando packet.id !== _state.myId');
+  });
+
+  describe('MOD-04: teams', () => {
+    it.todo('setTeam(3, 2) envia packet 26 com {targetID: 3, targetTeam: 2}');
+    it.todo('setTeamLock(true) envia packet 7 com {teamLock: true}');
+    it.todo('setTeamsEnabled(false) envia packet 32 com {t: false}');
+  });
+
+  describe('MOD-05: host control', () => {
+    it.todo('giveHost(5) envia packet 34 com {id: 5}');
+    it.todo('setNoHostSwap(true) envia packet 50 sem payload');
+    it.todo('setNoHostSwap(false) NÃO envia packet — loga warn');
+  });
+});

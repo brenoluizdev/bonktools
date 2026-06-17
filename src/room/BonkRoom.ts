@@ -50,7 +50,16 @@ type TransportLike = {
  *
  * Estados: idle → connecting → active → dead → rebuilding → active
  */
+// @ts-ignore TS2507 — mesmo workaround de BonkTransport.ts: TS 5.9 + NodeNext DTS resolve
+// eventemitter3 v5 default export como namespace ao processar via tsup antes do cache estar quente.
 export class BonkRoom extends EventEmitter<BonkRoomEvents> {
+  // declare explicita os métodos herdados — necessário pois @ts-ignore impede herança de tipos
+  declare emit:              import('eventemitter3').EventEmitter<BonkRoomEvents>['emit'];
+  declare on:                import('eventemitter3').EventEmitter<BonkRoomEvents>['on'];
+  declare once:              import('eventemitter3').EventEmitter<BonkRoomEvents>['once'];
+  declare off:               import('eventemitter3').EventEmitter<BonkRoomEvents>['off'];
+  declare removeAllListeners: import('eventemitter3').EventEmitter<BonkRoomEvents>['removeAllListeners'];
+
   // Pitfall 4: TODO estado em propriedades de instância — nunca variável de módulo
   private transport: TransportLike | null = null;
   private _state: RoomState = createEmptyRoomState();

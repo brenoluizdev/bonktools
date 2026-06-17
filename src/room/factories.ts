@@ -31,7 +31,7 @@ function parseRoomUrl(url: string): { roomId: string; bypass: string } | null {
   if (!match) {
     return null;
   }
-  return { roomId: match[1], bypass: match[2] ?? '' };
+  return { roomId: match[1]!, bypass: match[2] ?? '' };
 }
 
 /**
@@ -131,15 +131,25 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
   let room: BonkRoom | null = null;
   try {
     if (transport) {
-      room = new BonkRoom({ desiredState, transport, reconnectPolicy, logger });
+      room = new BonkRoom({
+        desiredState,
+        transport,
+        ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
+        ...(logger !== undefined ? { logger } : {}),
+      });
     } else {
       const transportOptions: BonkTransportOptions = {
         server: serverInfo,
         auth,
         protocolVersion,
-        logger,
+        ...(logger !== undefined ? { logger } : {}),
       };
-      room = new BonkRoom({ desiredState, transportOptions, reconnectPolicy, logger });
+      room = new BonkRoom({
+        desiredState,
+        transportOptions,
+        ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
+        ...(logger !== undefined ? { logger } : {}),
+      });
     }
 
     // Registrar listener ANTES de connect (evita perder packet 49 disparado
@@ -169,8 +179,8 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
       hidden: hidden ? 1 : 0,
       quick,
       mode: String(desiredState.mode ?? 'b'),
-      token: token ?? undefined,
-      guestName,
+      ...(token !== null ? { token } : {}),
+      ...(guestName !== undefined ? { guestName } : {}),
       avatar: DEFAULT_AVATAR,
     });
     room.sendPacket(createEventId, createPayload);
@@ -257,15 +267,25 @@ export async function joinRoom(
   let room: BonkRoom | null = null;
   try {
     if (transport) {
-      room = new BonkRoom({ desiredState, transport, reconnectPolicy, logger });
+      room = new BonkRoom({
+        desiredState,
+        transport,
+        ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
+        ...(logger !== undefined ? { logger } : {}),
+      });
     } else {
       const transportOptions: BonkTransportOptions = {
         server: { server, lat: 0, long: 0, country: 'XX' },
         auth,
         protocolVersion,
-        logger,
+        ...(logger !== undefined ? { logger } : {}),
       };
-      room = new BonkRoom({ desiredState, transportOptions, reconnectPolicy, logger });
+      room = new BonkRoom({
+        desiredState,
+        transportOptions,
+        ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
+        ...(logger !== undefined ? { logger } : {}),
+      });
     }
 
     // Registrar listener ANTES de connect (evita perder packet 3 disparado
@@ -287,8 +307,8 @@ export async function joinRoom(
       version: protocolVersion,
       peerID,
       bypass,
-      token: token ?? undefined,
-      guestName,
+      ...(token !== null ? { token } : {}),
+      ...(guestName !== undefined ? { guestName } : {}),
       roomPassword: password,
       team,
     });

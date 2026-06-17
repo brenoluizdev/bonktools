@@ -36,3 +36,12 @@ export interface BonkTransportOptions {
    */
   certPath?: string;
 }
+
+/**
+ * Mapa de eventos tipados do BonkTransport.
+ * Consumido como generic: `class BonkTransport extends EventEmitter<BonkTransportEvents>`.
+ */
+export interface BonkTransportEvents {
+  disconnect: [reason: string];
+  packet:     [data: [number, ...unknown[]]];
+}

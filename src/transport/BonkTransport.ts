@@ -11,7 +11,8 @@ import type { Logger } from 'pino';
 import { encodeTimesync } from '../codec/encode.js';
 import { decode } from '../codec/decode.js';
 import { INCOMING_PACKET_IDS } from '../codec/packets.js';
-import type { BonkTransportOptions, ConnectionState } from './types.js';
+import type { BonkTransportOptions, ConnectionState, BonkTransportEvents } from './types.js';
+import type { EventEmitter as EE3 } from 'eventemitter3';
 
 // O shim socket-shim.d.ts usa `export = io` — o tipo Socket (interface interna) não é
 // exportado nomeadamente. Derivamos o tipo da conexão do retorno de io().
@@ -25,7 +26,16 @@ const CHANGE_OWN_TEAM_PACKET = 6; // teams: 0=spec, 1=ffa, 2=red, 3=blue, 4=gree
 // KI-01: bonk.io migrou para Google Trust Services (2026). tls.rootCertificates cobre GTS.
 // PEM Sectigo (bonk_fullchain.pem) removido da Abordagem 1 — mantém apenas tls.rootCertificates.
 
-export class BonkTransport extends EventEmitter {
+// TS2507 workaround: TypeScript 5.9+ NodeNext DTS builder resolve o import default de eventemitter3
+// como typeof namespace ao processar este arquivo antes de BonkRoom.ts. O ignore suprime o falso
+// positivo sem afetar a herança em runtime — BonkRoom.ts usa o mesmo padrão sem erro.
+// @ts-ignore TS2507
+export class BonkTransport extends EventEmitter<BonkTransportEvents> {
+  // declare explicita os métodos herdados — necessário pois @ts-ignore impede herança de tipos
+  declare emit: EE3<BonkTransportEvents>['emit'];
+  declare on:   EE3<BonkTransportEvents>['on'];
+  declare off:  EE3<BonkTransportEvents>['off'];
+
   private socket: Socket | null = null;
   private keepAliveTimer: NodeJS.Timeout | null = null;
   private antiIdleTimer: NodeJS.Timeout | null = null;
@@ -138,7 +148,7 @@ export class BonkTransport extends EventEmitter {
       // PEM Sectigo (bonk_fullchain.pem) removido — inútil após migração bonk.io → GTS (2026).
       const primary = io(url, {
         ...baseOpts,
-        ca: tls.rootCertificates,
+        ca: [...tls.rootCertificates],
         rejectUnauthorized: true,
       });
       attachHandlers(primary, true);

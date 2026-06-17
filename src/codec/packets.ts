@@ -424,6 +424,23 @@ export const OUTGOING_PACKET_IDS = {
   JOIN_ROOM: 13,
   SET_ROOM_NAME: 52,
   SET_ROOM_PASSWORD: 53,
+  // Phase 4 — game flow e moderation
+  // ATENÇÃO Phase 4: outgoing 10 (CHAT_MESSAGE) != incoming 20 (CHAT_MESSAGE) — namespaces distintos.
+  TRIGGER_START: 5,
+  TEAM_LOCK: 7,
+  KICK_BAN_PLAYER: 9,
+  CHAT_MESSAGE: 10,
+  RETURN_TO_LOBBY: 14,
+  SEND_MODE: 20,
+  SEND_ROUNDS: 21,
+  SEND_MAP_DELETE: 22,
+  SEND_MAP_ADD: 23,
+  CHANGE_OTHER_TEAM_OTHER: 26,
+  SEND_TEAM_SETTINGS: 32,
+  SEND_HOST_CHANGE: 34,
+  SEND_START_COUNTDOWN: 36,
+  SEND_ABORT_COUNTDOWN: 37,
+  SEND_NO_HOST_SWAP: 50,
 } as const;
 
 // ─── Payloads de outgoing packets Phase 3 ─────────────────────────────────────
@@ -470,4 +487,79 @@ export interface SetRoomNamePayload {
 
 export interface SetRoomPasswordPayload {
   newPass: string;
+}
+
+// ─── Payloads de outgoing packets Phase 4 ─────────────────────────────────────
+
+export interface GameSettings {
+  map: string;
+  /** Game type. Default: 2 */
+  gt: number;
+  wl: number;
+  q: boolean;
+  tl: boolean;
+  tea: boolean;
+  /** Game engine (e.g. "b" = bonk, "ar" = arrow). */
+  ga: string;
+  /** Game mode (e.g. "b" = default). */
+  mo: string;
+  bal: Record<number, number> | unknown[];
+}
+
+export interface StartGamePayload {
+  /** Initial state blob captured from ROOM_JOIN packet. */
+  is: string;
+  gs: GameSettings;
+}
+
+export interface StartGameOptions {
+  /** Initial state blob — if omitted, uses DEFAULT_IS_BLOB captured during spike. */
+  is?: string;
+  gs?: Partial<GameSettings>;
+}
+
+export interface KickBanPayload {
+  banshortid: number;
+  /** Present only for kick; absent for ban. */
+  kickonly?: true;
+}
+
+export interface ChatMessagePayload {
+  message: string;
+}
+
+export interface SendModePayload {
+  ga: string;
+  mo: string;
+}
+
+export interface SendRoundsPayload {
+  w: number;
+}
+
+export interface SendMapAddPayload {
+  m: string;
+}
+
+export interface ChangeOtherTeamPayload {
+  targetID: number;
+  /** 0=spec 1=ffa 2=red 3=blue 4=green 5=yellow */
+  targetTeam: number;
+}
+
+export interface TeamLockPayload {
+  teamLock: boolean;
+}
+
+export interface SendTeamSettingsPayload {
+  t: boolean;
+}
+
+export interface SendHostChangePayload {
+  id: number;
+}
+
+export interface StartCountdownPayload {
+  /** Countdown seconds. Defaults to 3 when omitted by caller. */
+  num: number;
 }
