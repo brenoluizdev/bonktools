@@ -55,6 +55,7 @@ function isTerminalReason(reason: RoomDeadReason): boolean {
  */
 // @ts-ignore TS2507 — mesmo workaround de BonkRoom.ts: TS 5.9 + NodeNext DTS resolve
 // eventemitter3 v5 default export como namespace ao processar via tsup antes do cache estar quente.
+// Remover esta supressão ao atualizar tsup além de 8.5 ou TypeScript além de 5.7 e verificar se TS2507 sumiu.
 export class BonkSession extends EventEmitter<BonkSessionEvents> {
   // declare explicita os métodos herdados — necessário pois @ts-ignore impede herança de tipos
   declare emit:               import('eventemitter3').EventEmitter<BonkSessionEvents>['emit'];
@@ -70,6 +71,8 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
   private readonly throttleOpts: AccountThrottleOptions;
   private readonly _rooms: Map<string, PoolEntry> = new Map();
   private readonly _desiredConfigs: RoomConfig[] = [];
+  // WR-05: rastreia criações em andamento por config.id para evitar duplicatas no reconcile.
+  private readonly _inFlight: Set<string> = new Set();
   private reconcileTimer: NodeJS.Timeout | null = null;
   private destroying = false;
   private readonly logger: Logger;
@@ -102,14 +105,15 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
   /**
    * Cria uma sala e a adiciona ao pool com stagger via throttle.
    * Reusa o AuthClient e o token compartilhados (conta única). Retorna o localId.
+   *
+   * CR-03: não insere placeholder com null! — a entrada só entra no pool após
+   * createRoom resolver com sucesso, eliminando o risco de null.room em acessos
+   * concorrentes durante a janela de criação.
    */
   async addRoom(config: RoomConfig): Promise<string> {
     await this.throttle.acquire(this.logger);
 
     const localId = randomUUID();
-    // Placeholder no pool: status 'starting' enquanto createRoom não resolve.
-    this._rooms.set(localId, { room: null!, status: 'starting', config });
-
     let room: BonkRoom;
     try {
       room = await createRoom({
@@ -128,7 +132,6 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
         logger: this.logger,
       });
     } catch (err) {
-      this._rooms.delete(localId);
       throw err;
     }
 
@@ -177,16 +180,20 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
   /**
    * Recria uma sala morta por causa transitória, respeitando o throttle por conta.
    * Remove a entrada antiga e cria uma nova (novo localId via addRoom).
+   * WR-05: registra config.id em _inFlight para bloquear reconcile concorrente.
    */
   private async scheduleRecreate(localId: string, config: RoomConfig): Promise<void> {
     if (this.destroying) {
       return;
     }
     this._rooms.delete(localId);
+    this._inFlight.add(config.id);
     try {
       await this.addRoom(config);
     } catch (err) {
       this.logger.warn({ localId, err: (err as Error).message }, 'scheduleRecreate falhou');
+    } finally {
+      this._inFlight.delete(config.id);
     }
   }
 
@@ -206,8 +213,11 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
 
   /**
    * Diferença entre _desiredConfigs e o pool: recria as salas desejadas que não
-   * têm entrada 'active' (ou 'starting') no pool — rede de segurança para falhas
-   * silenciosas que não emitiram 'room-dead' (D-07).
+   * têm entrada 'active' no pool nem estão em voo (_inFlight) — rede de segurança
+   * para falhas silenciosas que não emitiram 'room-dead' (D-07).
+   *
+   * WR-05: checa _inFlight antes de disparar addRoom para evitar criações duplicadas
+   * quando createRoom falhou e a entrada foi removida do pool antes do reconcile.
    */
   private reconcile(): void {
     if (this.destroying) {
@@ -220,8 +230,9 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
       }
     }
     for (const config of this._desiredConfigs) {
-      if (!liveConfigIds.has(config.id)) {
-        void this.addRoom(config);
+      if (!liveConfigIds.has(config.id) && !this._inFlight.has(config.id)) {
+        this._inFlight.add(config.id);
+        void this.addRoom(config).finally(() => this._inFlight.delete(config.id));
       }
     }
   }
@@ -230,11 +241,16 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
    * Cria todas as salas declaradas com stagger + jitter entre criações (RM-05, D-09),
    * registra as configs desejadas para o reconcile loop e arma o timer de 60s.
    * O caller deve chamar getToken() antes para reusar o token entre as salas.
+   *
+   * WR-02: guard contra dupla invocação — lança se _desiredConfigs já foi populado.
    */
   async startFromConfig(config: {
     rooms: RoomConfig[];
     throttle: { maxConcurrentRooms: number; roomCreationDelayMs: number; roomCreationJitterMs: number };
   }): Promise<void> {
+    if (this._desiredConfigs.length > 0) {
+      throw new Error('BonkSession.startFromConfig: já foi iniciada — chame destroy() antes.');
+    }
     this._desiredConfigs.push(...config.rooms);
 
     for (let i = 0; i < config.rooms.length; i++) {
