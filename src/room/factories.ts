@@ -109,13 +109,13 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
   } = opts;
 
   // ── Resolver auth + servidor + peerID ──────────────────────────────────────
-  const authClient = new AuthClient(undefined, logger);
-  let token: string | null = null;
+  const authClient = opts.authClient ?? new AuthClient(undefined, logger);
+  let token: string | null = opts.token ?? null;
   let guestName: string | undefined;
 
-  if (auth.type === 'registered') {
+  if (token === null && auth.type === 'registered') {
     token = await authClient.getToken(auth.username, auth.password);
-  } else {
+  } else if (auth.type === 'guest') {
     guestName = auth.guestName;
   }
 

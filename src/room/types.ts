@@ -137,6 +137,10 @@ export interface CreateRoomOptions {
    * HTTP / server discovery e usa o transport diretamente. Produção não usa.
    */
   transport?: BonkRoomOptions['transport'];
+  /** AuthClient já instanciado (BonkSession injeta o compartilhado). Quando ausente, cria um novo. */
+  authClient?: import('../auth/AuthClient.js').AuthClient;
+  /** Token já obtido (BonkSession pré-autentica). Quando ausente e auth.type==='registered', chama getToken. */
+  token?: string;
   /** ID de banco de dados do usuário. Default: 2 (placeholder genérico). */
   dbid?: number;
   /** Sala oculta na lista pública. Default: false. */
