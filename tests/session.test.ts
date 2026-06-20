@@ -55,6 +55,7 @@ function makeMockRoom(): MockRoom {
 }
 
 const ROOM_CONFIG = { id: 'r1', name: 'Sala 1', maxPlayers: 6, mode: 'b', rounds: 3 };
+const RECONCILE_INTERVAL_MS = 60_000;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -154,19 +155,16 @@ describe('BonkSession — reconcile loop (RM-01, D-07, D-08)', () => {
       rooms: [ROOM_CONFIG],
       throttle: { maxConcurrentRooms: 3, roomCreationDelayMs: 0, roomCreationJitterMs: 0 },
     });
-    await vi.runAllTimersAsync();
 
     createRoomMock.mockClear();
     createRoomMock.mockImplementation(async () => makeMockRoom());
 
     // Simular inconsistência: remover sala do pool sem disparar reconcile manual.
     const id = [...session.rooms.keys()][0]!;
-    session.rooms.get(id);
     (session as unknown as { _rooms: Map<string, unknown> })._rooms.delete(id);
 
     // Avançar o timer de 60s → reconcile recria a sala faltante.
-    await vi.advanceTimersByTimeAsync(60_000);
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(RECONCILE_INTERVAL_MS);
 
     expect(createRoomMock).toHaveBeenCalled();
 
@@ -198,7 +196,6 @@ describe('BonkSession — destroy (RM-04)', () => {
       rooms: [ROOM_CONFIG],
       throttle: { maxConcurrentRooms: 3, roomCreationDelayMs: 0, roomCreationJitterMs: 0 },
     });
-    await vi.runAllTimersAsync();
 
     await session.destroy();
 
@@ -228,7 +225,8 @@ describe('BonkSession — stagger/jitter (RM-05, D-09)', () => {
       throttle: { maxConcurrentRooms: 3, roomCreationDelayMs: 1000, roomCreationJitterMs: 0 },
     });
 
-    await vi.runAllTimersAsync();
+    // 3 salas, 2 delays de 1000ms entre elas — avançar cobre ambos sem tocar o interval de 60s.
+    await vi.advanceTimersByTimeAsync(2000);
     await promise;
 
     expect(createRoomMock).toHaveBeenCalledTimes(3);
