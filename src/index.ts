@@ -113,3 +113,14 @@ export type {
   StartCountdownPayload,
 } from './codec/packets.js';
 export type { AutoJoinResponse } from './auth/types.js';
+
+// Session — Phase 5
+export { BonkSession } from './session/BonkSession.js';
+export { AccountThrottle } from './session/AccountThrottle.js';
+export type {
+  RoomStatus,
+  RoomConfig,
+  AccountThrottleOptions,
+  BonkSessionEvents,
+  BonkSessionOptions,
+} from './session/types.js';
