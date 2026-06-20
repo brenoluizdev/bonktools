@@ -30,16 +30,23 @@ export class AccountThrottle {
    * caso contrário aguarda o tempo necessário para acumular 1 token e tenta de novo.
    * Quando forçado a esperar e um logger é fornecido, loga waitMs e tokens atuais
    * (descoberta de teto de rate — NOTE C6).
+   *
+   * CR-02: loop iterativo substitui recursão para evitar stack overflow em esperas longas
+   * e para detectar refillPerSec inválido (≤ 0) com erro claro em vez de hang infinito.
    */
   async acquire(logger?: Logger): Promise<void> {
-    this.refill();
-    if (this.tokens >= 1) {
-      this.tokens -= 1;
-      return;
+    while (true) {
+      this.refill();
+      if (this.tokens >= 1) {
+        this.tokens -= 1;
+        return;
+      }
+      if (this.opts.refillPerSec <= 0) {
+        throw new Error('AccountThrottle: refillPerSec deve ser > 0');
+      }
+      const waitMs = ((1 - this.tokens) / this.opts.refillPerSec) * 1000;
+      logger?.info({ waitMs, tokens: this.tokens }, 'account-throttle: queued (possible rate ceiling)');
+      await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
     }
-    const waitMs = ((1 - this.tokens) / this.opts.refillPerSec) * 1000;
-    logger?.info({ waitMs, tokens: this.tokens }, 'account-throttle: queued (possible rate ceiling)');
-    await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
-    return this.acquire(logger);
   }
 }
