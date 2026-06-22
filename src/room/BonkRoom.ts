@@ -6,10 +6,11 @@
 import EventEmitter from 'eventemitter3'; // Pitfall 6: default import, não named
 import pino from 'pino';
 import type { Logger } from 'pino';
+import LZString from 'lz-string';
 import { BonkTransport } from '../transport/BonkTransport.js';
 import { decodeWithZod } from '../codec/decode.js';
 import { TERMINAL_STATUS_CODES, OUTGOING_PACKET_IDS } from '../codec/packets.js';
-import type { StartGameOptions } from '../codec/packets.js';
+import type { StartGameOptions, InformInLobbyPayload } from '../codec/packets.js';
 import { encodeStartGame } from '../codec/encode.js';
 import type { StatusCode, IncomingPacket, UnknownPacket } from '../codec/packets.js';
 import {
@@ -29,6 +30,31 @@ import { defaultReconnectPolicy, computeBackoff } from './ReconnectPolicy.js';
 import type { BonkRoomEvents, BonkRoomOptions, RoomDeadReason } from './types.js';
 import type { RoomState } from './RoomState.js';
 import type { ReconnectPolicy } from './ReconnectPolicy.js';
+
+// Mapa vazio padrão enviado no INFORM_IN_LOBBY quando nenhum mapa customizado está ativo.
+// Estrutura idêntica à do BonkBot (dbid 767645 = "Empty Map" público).
+const DEFAULT_EMPTY_MAP = {
+  v: 13,
+  s: { re: false, nc: false, pq: 1, gd: 25, fl: false },
+  physics: { shapes: [], fixtures: [], bodies: [], bro: [], joints: [], ppm: 12 },
+  spawns: [],
+  capZones: [],
+  m: {
+    a: 'BonkTools',
+    n: 'Empty Map',
+    dbv: 2,
+    dbid: 767645,
+    authid: -1,
+    date: '',
+    rxid: 0,
+    rxn: '',
+    rxa: '',
+    rxdb: 1,
+    cr: ['uint32'],
+    pub: true,
+    mo: '',
+  },
+};
 
 // Tipo mínimo para o transport injetado (real ou mock nos testes)
 type TransportLike = {
@@ -197,13 +223,35 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
   // ─── Phase 4 — Game Flow ──────────────────────────────────────────────────
 
-  /** Inicia a partida (packet 5). Spike confirmou: is='' aceito pelo servidor. */
+  /**
+   * Inicia a partida (packet 5 — TRIGGER_START).
+   * ATENÇÃO: o servidor ecoa o campo `is` sem modificar. Sem um blob LZ-String
+   * válido em opts.is, o client bonk.io recebe is='' e não inicializa o jogo.
+   * Passe opts.is com o blob capturado de uma sessão real (via BONK_INITIAL_STATE).
+   */
   startGame(opts?: StartGameOptions): void {
     if (!this.transport) {
       this.logger.warn({ opts }, 'startGame: transport não conectado — packet descartado');
       return;
     }
-    this.transport.sendPacket(OUTGOING_PACKET_IDS.TRIGGER_START, encodeStartGame(this.desiredState, opts));
+    const payload = encodeStartGame(this.desiredState, opts);
+    this.logger.info(
+      { engine: payload.gs.ga, mode: payload.gs.mo, rounds: payload.gs.wl, teams: payload.gs.tea, isLen: payload.is.length },
+      '[GAME] startGame → enviando TRIGGER_START',
+    );
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.TRIGGER_START, payload);
+  }
+
+  /** Marca o PRÓPRIO bot como ready/not-ready (packet 16 — SET_READY). */
+  setReady(ready: boolean): void {
+    if (!this.transport) return;
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.SET_READY, { ready });
+  }
+
+  /** Reseta status de ready de TODOS para false (packet 17 — ALL_READY_RESET, host only). */
+  allReadyReset(): void {
+    if (!this.transport) return;
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.ALL_READY_RESET, undefined);
   }
 
   /** Retorna todos ao lobby (packet 14). */
@@ -212,6 +260,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       this.logger.warn('stopGame: transport não conectado — packet descartado');
       return;
     }
+    this.logger.info('[GAME] stopGame → enviando RETURN_TO_LOBBY');
     this.transport.sendPacket(OUTGOING_PACKET_IDS.RETURN_TO_LOBBY, undefined);
   }
 
@@ -319,12 +368,26 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
   // ─── Phase 4 — Times e Host ───────────────────────────────────────────────
 
+  /**
+   * Move o próprio bot para um time (packet 6 — CHANGE_OWN_TEAM).
+   * Payload: { targetTeam: number }. Diferente de setTeam() que usa packet 26.
+   * team: 0=spec 1=ffa 2=red 3=blue 4=green 5=yellow
+   */
+  joinTeam(team: number): void {
+    if (!this.transport) {
+      this.logger.warn({ team }, 'joinTeam: transport não conectado — packet descartado');
+      return;
+    }
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.CHANGE_OWN_TEAM, { targetTeam: team });
+  }
+
   /** Move jogador para um time (packet 26). team: 0=spec 1=ffa 2=red 3=blue 4=green 5=yellow. */
   setTeam(id: number, team: number): void {
     if (!this.transport) {
       this.logger.warn({ id, team }, 'setTeam: transport não conectado — packet descartado');
       return;
     }
+    this.logger.info({ playerId: id, team }, '[MOVE] setTeam → CHANGE_OTHER_TEAM_OTHER');
     this.transport.sendPacket(OUTGOING_PACKET_IDS.CHANGE_OTHER_TEAM_OTHER, { targetID: id, targetTeam: team });
   }
 
@@ -337,8 +400,9 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     this.transport.sendPacket(OUTGOING_PACKET_IDS.TEAM_LOCK, { teamLock: locked });
   }
 
-  /** Habilita ou desabilita times (packet 32). */
+  /** Habilita ou desabilita times (packet 32). Persiste em desiredState para INFORM_IN_LOBBY. */
   setTeamsEnabled(enabled: boolean): void {
+    this.desiredState.teamsEnabled = enabled;
     if (!this.transport) {
       this.logger.warn({ enabled }, 'setTeamsEnabled: transport não conectado — packet descartado');
       return;
@@ -415,15 +479,58 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
       case 'PLAYER_JOIN':
         this._state = reducePlayerJoin(this._state, packet);
+        this.logger.info({ playerId: packet.id, userName: packet.userName, team: packet.team }, '[ROSTER] PLAYER_JOIN');
         this.emit('player-join', packet);
+        // Protocolo obrigatório: host deve enviar INFORM_IN_LOBBY (out 11) ao jogador que entrou.
+        // Sem esse packet, o bonk.io não entrega "Initial data" ao jogador → timeout no cliente.
+        if (this._state.myId !== null && this._state.myId === this._state.hostId) {
+          const balances: Record<number, number> = {};
+          for (const [id, player] of this._state.players) {
+            if (player.balance) {
+              balances[id] = player.balance;
+            }
+          }
+          // INFORM_IN_LOBBY requer mapa como objeto JSON raw (não LZ-string).
+          // Tenta descompressão; se falhar, usa DEFAULT_EMPTY_MAP.
+          // NOTA: mapa errado aqui pode fazer physics inicializar com bodies errados
+          // e impedir o is blob do GAME_START de aplicar corretamente.
+          let lobbyMap: unknown = DEFAULT_EMPTY_MAP;
+          if (this.desiredState.map) {
+            try {
+              const raw = LZString.decompressFromEncodedURIComponent(this.desiredState.map);
+              if (raw) lobbyMap = JSON.parse(raw) as unknown;
+            } catch { /* fallback to DEFAULT_EMPTY_MAP */ }
+          }
+          this.logger.debug(
+            { mapIsDefault: lobbyMap === DEFAULT_EMPTY_MAP },
+            '[INFORM_IN_LOBBY] enviando mapa',
+          );
+          const informPayload: InformInLobbyPayload = {
+            sid: packet.id,
+            gs: {
+              map: lobbyMap,
+              gt: 2,
+              wl: this.desiredState.rounds,
+              q: false,
+              tl: this._state.teamsLocked,
+              tea: this.desiredState.teamsEnabled ?? false,
+              ga: this.desiredState.engine ?? 'b',
+              mo: String(this.desiredState.mode || 'b'),
+              bal: balances,
+            },
+          };
+          this.transport?.sendPacket(OUTGOING_PACKET_IDS.INFORM_IN_LOBBY, informPayload);
+        }
         break;
 
       case 'PLAYER_LEAVE':
+        this.logger.info({ playerId: packet.id }, '[ROSTER] PLAYER_LEAVE');
         this._state = reducePlayerLeave(this._state, packet);
         this.emit('player-leave', packet);
         break;
 
       case 'TEAM_CHANGE':
+        this.logger.info({ playerId: packet.id, team: packet.team }, '[ROSTER] TEAM_CHANGE');
         this._state = reduceTeamChange(this._state, packet);
         this.emit('team-change', packet);
         break;
@@ -482,6 +589,10 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         break;
 
       case 'ROOM_CREATED':
+        // O criador da sala é sempre player 0 no protocolo bonk.io.
+        // O servidor não envia JOIN_ROOM (packet 3) ao criador — apenas a quem entra.
+        // BonkBot: game.id = 0; game.host = 0; (hardcoded ao criar sala).
+        this._state = { ...this._state, myId: 0, hostId: 0 };
         this.emit('room-created', packet);
         break;
 
@@ -490,11 +601,13 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         break;
 
       case 'GAME_END':
+        this.logger.info('[GAME] GAME_END recebido do servidor');
         this._state = reduceGameEnd(this._state);
         this.emit('game-end', packet);
         break;
 
       case 'GAME_START':
+        this.logger.info('[GAME] GAME_START recebido do servidor');
         this._state = reduceGameStart(this._state);
         this.emit('game-start', packet);
         break;

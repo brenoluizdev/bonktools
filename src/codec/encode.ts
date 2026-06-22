@@ -53,7 +53,9 @@ export function encodeSetRoomPassword(
 
 /**
  * Monta o payload do TRIGGER_START (outgoing 5) a partir de DesiredRoomState.
- * Spike confirmou: is='' é aceito pelo servidor (bonk.io gera estado internamente).
+ * ATENÇÃO: o servidor ECOA o `is` de volta sem modificar. Com is='' o GAME_START
+ * chega com is='' e o client bonk.io falha ao inicializar a engine de física.
+ * Passe opts.is com um blob LZ-String válido capturado de uma sessão real.
  */
 export function encodeStartGame(
   state: DesiredRoomState,
@@ -65,10 +67,10 @@ export function encodeStartGame(
     wl: state.rounds,
     q: false,
     tl: false,
-    tea: false,
+    tea: state.teamsEnabled ?? false,
     ga: state.engine ?? 'b',
     mo: String(state.mode || 'b'),
-    bal: {} as Record<number, number>,
+    bal: [] as unknown[],
     ...(opts?.gs ? Object.fromEntries(Object.entries(opts.gs).filter(([, v]) => v !== undefined)) : {}),
   };
   return { is: opts?.is ?? '', gs };

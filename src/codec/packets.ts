@@ -426,11 +426,17 @@ export const OUTGOING_PACKET_IDS = {
   TIMESYNC: 18,
   CREATE_ROOM: 12,
   JOIN_ROOM: 13,
+  // INFORM_IN_LOBBY: enviado pelo host ao receber PLAYER_JOIN para entregar dados iniciais ao jogador.
+  // Sem esse packet, o jogador vê "Initial data timeout." (protocolo obrigatório).
+  INFORM_IN_LOBBY: 11,
   SET_ROOM_NAME: 52,
   SET_ROOM_PASSWORD: 53,
   // Phase 4 — game flow e moderation
   // ATENÇÃO Phase 4: outgoing 10 (CHAT_MESSAGE) != incoming 20 (CHAT_MESSAGE) — namespaces distintos.
   TRIGGER_START: 5,
+  // Muda o próprio time (self-move). Payload: { targetTeam: number }.
+  // Diferente de CHANGE_OTHER_TEAM_OTHER (26) que move outro jogador.
+  CHANGE_OWN_TEAM: 6,
   TEAM_LOCK: 7,
   KICK_BAN_PLAYER: 9,
   CHAT_MESSAGE: 10,
@@ -442,6 +448,11 @@ export const OUTGOING_PACKET_IDS = {
   CHANGE_OTHER_TEAM_OTHER: 26,
   SEND_TEAM_SETTINGS: 32,
   SEND_HOST_CHANGE: 34,
+  // SET_READY: marca o SENDER como ready (true) ou not-ready (false). Packet 16.
+  // Apenas altera o próprio status — não pode forçar ready de outros jogadores.
+  SET_READY: 16,
+  // ALL_READY_RESET: host reseta o status de ready de TODOS para false. Packet 17.
+  ALL_READY_RESET: 17,
   SEND_START_COUNTDOWN: 36,
   SEND_ABORT_COUNTDOWN: 37,
   SEND_NO_HOST_SWAP: 50,
@@ -566,4 +577,30 @@ export interface SendHostChangePayload {
 export interface StartCountdownPayload {
   /** Countdown seconds. Defaults to 3 when omitted by caller. */
   num: number;
+}
+
+/** Payload do INFORM_IN_LOBBY (outgoing 11) — enviado pelo host quando um jogador entra. */
+export interface InformInLobbyPayload {
+  /** ID do jogador que acabou de entrar (packet.id do PLAYER_JOIN). */
+  sid: number;
+  gs: {
+    /** Dados do mapa atual (objeto raw, não LZ-string). */
+    map: unknown;
+    /** Game type. 2 = padrão. */
+    gt: number;
+    /** Win limit (rounds). */
+    wl: number;
+    /** Quick play. */
+    q: boolean;
+    /** Teams locked. */
+    tl: boolean;
+    /** Teams enabled. */
+    tea: boolean;
+    /** Game engine (ex: "b" = bonk, "f" = football). */
+    ga: string;
+    /** Game mode (ex: "b" = classic). */
+    mo: string;
+    /** Balanços por jogador ID. */
+    bal: Record<number, number> | unknown[];
+  };
 }

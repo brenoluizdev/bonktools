@@ -5,7 +5,6 @@
 
 import EventEmitter from 'eventemitter3';
 import io from 'socket.io-client';
-import * as tls from 'node:tls';
 import pino from 'pino';
 import type { Logger } from 'pino';
 import { encodeTimesync } from '../codec/encode.js';
@@ -84,9 +83,11 @@ export class BonkTransport extends EventEmitter<BonkTransportEvents> {
 
   /**
    * Conecta ao bonk.io via socket.io-client@2 com transports: ['websocket'] (EIO=3, CONN-01).
-   * Estratégia de duas tentativas TLS (KI-01 resolved — bonk.io migrou para Google Trust Services):
-   *   1. ca: tls.rootCertificates + rejectUnauthorized:true — cobre GTS sem PEM Sectigo (KI-01)
-   *   2. fallback rejectUnauthorized:false ESCOPADO ao socket (D-01) se houver erro de cert
+   *
+   * TLS: bonk.io não envia a cadeia intermediária completa (UNABLE_TO_VERIFY_LEAF_SIGNATURE),
+   * então rejectUnauthorized:false é necessário e escopado a este socket (D-01).
+   * forceNode:true força engine.io-client@3 a usar ws@7 em vez do WebSocket global nativo
+   * do Node.js 22 (que ignora todas as opções TLS do Node).
    */
   async connect(): Promise<void> {
     if (!this.opts) {
@@ -95,66 +96,48 @@ export class BonkTransport extends EventEmitter<BonkTransportEvents> {
     this.state = 'connecting';
 
     const url = `https://${this.opts.server.server}.bonk.io`;
-    const baseOpts = {
-      transports: ['websocket'] as string[],
-      reconnection: false,
-      timeout: 10000,
-      forceNew: true,
-      path: '/socket.io',
-    };
 
     await new Promise<void>((resolve, reject) => {
-      const attachHandlers = (socket: Socket, allowFallback: boolean): void => {
-        socket.on('connect', () => {
-          this.socket = socket;
-          this.state = 'connected';
-          this.startTimesync();
-          this.startAntiIdle();
-          // Pitfall 6: listeners de resposta usam ID numérico, não string.
-          socket.on(INCOMING_PACKET_IDS.TIMESYNC as unknown as string, (...args: unknown[]) => {
-            decode([INCOMING_PACKET_IDS.TIMESYNC, ...args]);
-          });
-          // Pitfall 7: nenhum packet é emitido antes deste evento 'connect'.
-          resolve();
-          // CR-01: emitir 'disconnect' para BonkRoom via EventEmitter
-          socket.on('disconnect', (reason: unknown) => {
-            this.emit('disconnect', String(reason ?? 'unknown'));
-          });
-          // CR-01: emitir 'packet' para cada ID incoming (exceto TIMESYNC que não é processado por BonkRoom)
-          for (const [, id] of Object.entries(INCOMING_PACKET_IDS)) {
-            if (id === INCOMING_PACKET_IDS.TIMESYNC) continue;
-            socket.on(id as unknown as string, (...args: unknown[]) => {
-              this.emit('packet', [id, ...args]);
-            });
-          }
-        });
-
-        socket.on('connect_error', (...args: unknown[]) => {
-          const message = String((args[0] as Error)?.message ?? args[0] ?? '');
-          // engine.io-client@3 → ws@7 não faz threading do CA customizado e emite "websocket error"
-          // genérico em vez de mensagem TLS específica (bug documentado internamente).
-          // Fazemos fallback apenas para erros TLS conhecidos ou para a mensagem genérica do ws@7.
-          // Não fazemos downgrade para DNS failure, ECONNREFUSED, server down etc. (B-01).
-          if (allowFallback && (/certificate|cert|tls|self.signed/i.test(message) || message.includes('websocket error') || message === '')) {
-            this.logger.warn({ err: message }, 'TLS/cert error — retrying with scoped rejectUnauthorized:false');
-            socket.disconnect();
-            const fallback = io(url, { ...baseOpts, rejectUnauthorized: false });
-            attachHandlers(fallback, false);
-            return;
-          }
-          this.state = 'disconnected';
-          reject(new Error(`bonk.io connect_error: ${message}`));
-        });
-      };
-
-      // KI-01: Abordagem 1 usa tls.rootCertificates (inclui Google Trust Services via store do sistema).
-      // PEM Sectigo (bonk_fullchain.pem) removido — inútil após migração bonk.io → GTS (2026).
-      const primary = io(url, {
-        ...baseOpts,
-        ca: [...tls.rootCertificates],
-        rejectUnauthorized: true,
+      const socket = io(url, {
+        transports: ['websocket'] as string[],
+        reconnection: false,
+        timeout: 10000,
+        forceNew: true,
+        path: '/socket.io',
+        forceNode: true,
+        rejectUnauthorized: false,
       });
-      attachHandlers(primary, true);
+
+      socket.on('connect', () => {
+        this.socket = socket;
+        this.state = 'connected';
+        this.startTimesync();
+        this.startAntiIdle();
+        // Pitfall 6: listeners de resposta usam ID numérico, não string.
+        socket.on(INCOMING_PACKET_IDS.TIMESYNC as unknown as string, (...args: unknown[]) => {
+          decode([INCOMING_PACKET_IDS.TIMESYNC, ...args]);
+        });
+        // Pitfall 7: nenhum packet é emitido antes deste evento 'connect'.
+        resolve();
+        // CR-01: emitir 'disconnect' para BonkRoom via EventEmitter
+        socket.on('disconnect', (reason: unknown) => {
+          this.emit('disconnect', String(reason ?? 'unknown'));
+        });
+        // CR-01: emitir 'packet' para cada ID incoming (exceto TIMESYNC que não é processado por BonkRoom)
+        for (const [, id] of Object.entries(INCOMING_PACKET_IDS)) {
+          if (id === INCOMING_PACKET_IDS.TIMESYNC) continue;
+          socket.on(id as unknown as string, (...args: unknown[]) => {
+            this.emit('packet', [id, ...args]);
+          });
+        }
+      });
+
+      socket.on('connect_error', (...args: unknown[]) => {
+        const message = String((args[0] as Error)?.message ?? args[0] ?? '');
+        this.state = 'disconnected';
+        socket.disconnect();
+        reject(new Error(`bonk.io connect_error: ${message}`));
+      });
     });
   }
 
@@ -194,7 +177,6 @@ export class BonkTransport extends EventEmitter<BonkTransportEvents> {
   sendPacket(eventId: number, data: unknown): void {
     if (this.socket?.connected) {
       this.socket.emit(eventId, data);
-      this.logger.debug({ eventId }, 'packet sent');
     }
   }
 

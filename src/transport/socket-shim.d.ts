@@ -6,6 +6,7 @@ declare module 'socket.io-client' {
     reconnection?: boolean;
     timeout?: number;
     forceNew?: boolean;
+    forceNode?: boolean;
     path?: string;
     rejectUnauthorized?: boolean;
     ca?: Buffer | string | Array<Buffer | string>;

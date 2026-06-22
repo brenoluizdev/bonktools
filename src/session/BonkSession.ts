@@ -114,31 +114,59 @@ export class BonkSession extends EventEmitter<BonkSessionEvents> {
     await this.throttle.acquire(this.logger);
 
     const localId = randomUUID();
-    let room: BonkRoom;
-    try {
-      room = await createRoom({
-        auth: this.auth,
-        authClient: this.authClient,
-        ...(this.token !== null ? { token: this.token } : {}),
-        desiredState: {
-          roomName: config.name,
-          password: config.password ?? '',
-          maxPlayers: config.maxPlayers ?? 6,
-          mode: config.mode ?? 'b',
-          rounds: config.rounds ?? 3,
-          ...(config.map !== undefined ? { map: config.map } : {}),
-        },
-        ...(config.hidden !== undefined ? { hidden: config.hidden } : {}),
-        logger: this.logger,
-      });
-    } catch (err) {
-      throw err;
-    }
+    const room = await this.createRoomWithRetry(config);
 
     this._rooms.set(localId, { room, status: 'active', config });
     this.attachRoom(localId, room);
+    this.logger.info({ roomName: config.name, shareLink: room.shareLink }, 'sala ativa');
     this.emit('room-added', localId);
     return localId;
+  }
+
+  /**
+   * Chama createRoom com retry para erros transitórios de rede/servidor (HTTP 5xx,
+   * ECONNREFUSED, ETIMEDOUT). Erros terminais (auth inválido, sala banida) propagam
+   * imediatamente. Backoff exponencial: 3s → 6s → 12s → 24s → 30s (cap).
+   */
+  private async createRoomWithRetry(config: RoomConfig, maxAttempts = 5): Promise<BonkRoom> {
+    const BASE_DELAY_MS = 3_000;
+    const MAX_DELAY_MS = 30_000;
+
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await createRoom({
+          auth: this.auth,
+          authClient: this.authClient,
+          ...(this.token !== null ? { token: this.token } : {}),
+          desiredState: {
+            roomName: config.name,
+            password: config.password ?? '',
+            maxPlayers: config.maxPlayers ?? 6,
+            mode: config.mode ?? 'b',
+            rounds: config.rounds ?? 3,
+            ...(config.map !== undefined ? { map: config.map } : {}),
+          },
+          ...(config.hidden !== undefined ? { hidden: config.hidden } : {}),
+          logger: this.logger,
+        });
+      } catch (err) {
+        const msg = (err as Error).message ?? '';
+        const isTransient =
+          /HTTP [5]\d{2}/.test(msg) ||
+          /ECONNREFUSED|ETIMEDOUT|ENOTFOUND|ECONNRESET/.test(msg);
+
+        if (!isTransient || attempt >= maxAttempts || this.destroying) {
+          throw err;
+        }
+
+        const delay = Math.min(BASE_DELAY_MS * 2 ** (attempt - 1), MAX_DELAY_MS);
+        this.logger.warn(
+          { attempt, maxAttempts, delayMs: delay, err: msg },
+          'createRoom: erro transitório — aguardando antes de retentar',
+        );
+        await new Promise<void>((resolve) => setTimeout(resolve, delay));
+      }
+    }
   }
 
   /** Desconecta e remove uma sala do pool. No-op se o id não existir. */

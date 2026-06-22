@@ -76,6 +76,8 @@ export interface DesiredRoomState {
   rounds: number;
   /** LZ-String blob ou null para mapa padrão (Fase 4 aplicará). */
   map?: string | null;
+  /** Times habilitados (packet 32). Refletido no INFORM_IN_LOBBY (campo tea). */
+  teamsEnabled?: boolean;
 }
 
 // ─── BonkRoomOptions ─────────────────────────────────────────────────────────
