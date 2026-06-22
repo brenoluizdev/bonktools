@@ -70,7 +70,7 @@ export function encodeStartGame(
     tea: state.teamsEnabled ?? false,
     ga: state.engine ?? 'b',
     mo: String(state.mode || 'b'),
-    bal: {} as Record<number, number>,
+    bal: [] as unknown[],
     ...(opts?.gs ? Object.fromEntries(Object.entries(opts.gs).filter(([, v]) => v !== undefined)) : {}),
   };
   return { is: opts?.is ?? '', gs };
