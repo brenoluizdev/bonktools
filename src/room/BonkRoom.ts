@@ -497,7 +497,10 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
           let lobbyMap: unknown = DEFAULT_EMPTY_MAP;
           if (this.desiredState.map) {
             try {
-              const raw = LZString.decompressFromEncodedURIComponent(this.desiredState.map);
+              // bonk.io exporta mapas em Base64 (contém '+'); fallback para EncodedURIComponent.
+              const raw =
+                LZString.decompressFromBase64(this.desiredState.map) ||
+                LZString.decompressFromEncodedURIComponent(this.desiredState.map);
               if (raw) lobbyMap = JSON.parse(raw) as unknown;
             } catch { /* fallback to DEFAULT_EMPTY_MAP */ }
           }

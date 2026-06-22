@@ -600,7 +600,7 @@ export interface InformInLobbyPayload {
     ga: string;
     /** Game mode (ex: "b" = classic). */
     mo: string;
-    /** Balanços por jogador ID. */
+    /** Bro assignment. {} = usar team state (correto). [] = assignar por ID order (coloca spec players no campo). */
     bal: Record<number, number> | unknown[];
   };
 }
