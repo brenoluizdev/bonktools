@@ -12,6 +12,9 @@
       "require": "./dist/index.cjs"
     }
   },
+  "bin": {
+    "bonktools-capture-is": "./dist/cli/capture-is.js"
+  },
   "files": [
     "dist",
     "certs"

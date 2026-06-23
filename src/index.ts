@@ -124,3 +124,9 @@ export type {
   BonkSessionEvents,
   BonkSessionOptions,
 } from './session/types.js';
+
+// Teams
+export { TEAM_SPEC, TEAM_FFA, TEAM_BLUE, TEAM_RED, TEAM_GREEN, TEAM_YELLOW } from './room/teams.js';
+
+// Football
+export { FOOTBALL_DEFAULT_BLOBS, getFootballDefaultBlob } from './football/defaultBlobs.js';
