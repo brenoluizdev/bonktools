@@ -119,11 +119,9 @@ export class BonkTransport extends EventEmitter<BonkTransportEvents> {
         });
         // Pitfall 7: nenhum packet é emitido antes deste evento 'connect'.
         resolve();
-        // CR-01: emitir 'disconnect' para BonkRoom via EventEmitter
         socket.on('disconnect', (reason: unknown) => {
           this.emit('disconnect', String(reason ?? 'unknown'));
         });
-        // CR-01: emitir 'packet' para cada ID incoming (exceto TIMESYNC que não é processado por BonkRoom)
         for (const [, id] of Object.entries(INCOMING_PACKET_IDS)) {
           if (id === INCOMING_PACKET_IDS.TIMESYNC) continue;
           socket.on(id as unknown as string, (...args: unknown[]) => {
