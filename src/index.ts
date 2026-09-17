@@ -130,3 +130,10 @@ export { TEAM_SPEC, TEAM_FFA, TEAM_BLUE, TEAM_RED, TEAM_GREEN, TEAM_YELLOW } fro
 
 // Football
 export { FOOTBALL_DEFAULT_BLOBS, getFootballDefaultBlob } from './football/defaultBlobs.js';
+
+// Outros gamemodes (classic, arrows, death arrows, grapple, vtol)
+export { GAMEMODE_DEFAULT_BLOBS, getGamemodeDefaultBlob } from './gamemodes/defaultBlobs.js';
+
+// Cache local de IS blobs por mapa (substitui os defaults estáticos acima,
+// que só são válidos se a sala estiver no MESMO mapa em que foram capturados).
+export { MapBlobCache, hashMap, DEFAULT_MAP_ID } from './cache/mapBlobCache.js';

@@ -135,6 +135,11 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     return this._shareLink;
   }
 
+  /** Blob LZ-String do mapa ativo (desiredState.map). Null = mapa padrão do bonk.io. */
+  get currentMap(): string | null {
+    return this.desiredState.map ?? null;
+  }
+
   /**
    * Conecta ao bonk.io (modo real — usa BonkTransportOptions).
    * Em modo teste, o transport já foi injetado no constructor.
