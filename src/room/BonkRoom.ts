@@ -25,6 +25,7 @@ import {
   reducePlayerPings,
   reduceGameStart,
   reduceGameEnd,
+  reduceBalanceSet,
 } from './RoomState.js';
 import { defaultReconnectPolicy, computeBackoff } from './ReconnectPolicy.js';
 import type { BonkRoomEvents, BonkRoomOptions, RoomDeadReason } from './types.js';
@@ -647,6 +648,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         break;
 
       case 'BALANCE_SET':
+        this._state = reduceBalanceSet(this._state, packet);
         this.emit('balance-set', packet);
         break;
 

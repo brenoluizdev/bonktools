@@ -11,6 +11,7 @@ import {
   reduceReadyChange,
   reduceTabbedChange,
   reducePlayerPings,
+  reduceBalanceSet,
 } from '../src/room/RoomState.js';
 import type { RoomJoinPacket, PlayerJoinPacket, PlayerLeavePacket } from '../src/codec/packets.js';
 
@@ -140,6 +141,29 @@ describe('reduceTeamChange — atualiza team do player (packet 8)', () => {
       team: 3,
     });
     expect(next.players.get(2)?.team).toBe(3);
+  });
+});
+
+describe('reduceBalanceSet — atualiza balance do player (packet 36)', () => {
+  it('atualiza o campo balance do player', () => {
+    const state = createEmptyRoomState();
+    const withPlayer = reducePlayerJoin(state, PLAYER_JOIN_FIXTURE);
+    const next = reduceBalanceSet(withPlayer, {
+      type: 'BALANCE_SET',
+      playerId: 2,
+      balance: 1,
+    });
+    expect(next.players.get(2)?.balance).toBe(1);
+  });
+
+  it('retorna estado inalterado se o player não existir', () => {
+    const state = createEmptyRoomState();
+    const next = reduceBalanceSet(state, {
+      type: 'BALANCE_SET',
+      playerId: 999,
+      balance: 2,
+    });
+    expect(next).toBe(state);
   });
 });
 

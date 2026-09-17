@@ -10,6 +10,7 @@ import type {
   TeamChangePacket,
   ReadyChangePacket,
   PlayerPingsPacket,
+  BalanceSetPacket,
 } from '../codec/packets.js';
 
 // ─── PlayerData ───────────────────────────────────────────────────────────────
@@ -204,6 +205,25 @@ export function reduceTeamChange(state: RoomState, packet: TeamChangePacket): Ro
   }
   const players = new Map(state.players);
   players.set(packet.id, { ...existing, team: packet.team });
+  return { ...state, players };
+}
+
+/**
+ * Reducer para packet 36 (BALANCE_SET) — atualiza o índice de "bro body" do
+ * jogador na partida ativa. Sem isso, `player.balance` fica sempre 0 e o
+ * `bal` enviado em INFORM_IN_LOBBY para qualquer jogador que entrar depois
+ * fica sempre vazio — o client dele recebe os streams de física via WebRTC
+ * mas não sabe a qual jogador cada corpo pertence, então nunca renderiza a
+ * partida em andamento (fica preso na tela de lobby/spectating).
+ * Se o player não existir, retorna estado inalterado.
+ */
+export function reduceBalanceSet(state: RoomState, packet: BalanceSetPacket): RoomState {
+  const existing = state.players.get(packet.playerId);
+  if (!existing) {
+    return state;
+  }
+  const players = new Map(state.players);
+  players.set(packet.playerId, { ...existing, balance: packet.balance });
   return { ...state, players };
 }
 
