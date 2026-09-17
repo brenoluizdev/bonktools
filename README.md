@@ -22,6 +22,7 @@ Cliente TypeScript **headless** para [bonk.io](https://bonk.io) — conecta dire
 - [Reconexão automática](#reconexão-automática)
 - [`BonkSession` — pool de salas](#bonksession--pool-de-salas)
 - [Tratamento de erros](#tratamento-de-erros)
+- [Registro público de IS blobs](#registro-público-de-is-blobs)
 - [Decisões técnicas](#decisões-técnicas)
 - [Notas de segurança](#notas-de-segurança)
 - [Disclaimer](#disclaimer)
@@ -449,6 +450,21 @@ try {
   }
 }
 ```
+
+---
+
+## Registro público de IS blobs
+
+O IS blob (estado inicial da física) depende do mapa ativo na sala — capturar um novo exige um client real do bonk.io iniciando a partida (veja [Decisões técnicas](#decisões-técnicas)). Pra evitar que todo mundo precise capturar os mesmos blobs dos mapas padrão de cada gamemode, [`registry/blobs.json`](./registry/blobs.json) espelha publicamente os que este projeto já capturou:
+
+```ts
+const res = await fetch('https://cdn.jsdelivr.net/gh/brenoluizdev/bonktools@main/registry/blobs.json');
+const registry = await res.json();
+
+const blob = registry.gamemodeDefaults.vtol.blobs['2']; // vtol, mapa padrão, 1v1
+```
+
+Os mesmos dados já vêm embutidos na lib via `GAMEMODE_DEFAULT_BLOBS`/`FOOTBALL_DEFAULT_BLOBS` — o registro é útil pra quem não usa TypeScript/o pacote npm diretamente, ou quer os dados mais recentes sem esperar um novo release. Detalhes do formato e como contribuir: [`registry/README.md`](./registry/README.md).
 
 ---
 
