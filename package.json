@@ -14,7 +14,7 @@
     }
   },
   "bin": {
-    "bonktools-capture-is": "./dist/cli/capture-is.js"
+    "bonktools-capture-is": "dist/cli/capture-is.js"
   },
   "files": [
     "dist",
