@@ -1,6 +1,7 @@
 {
-  "name": "@bonktools/core",
+  "name": "bonktools",
   "version": "0.1.0",
+  "description": "Headless TypeScript client for bonk.io — connects directly via Socket.IO, no browser required. Create/join rooms, manage rosters, and run 24/7 bots with automatic reconnection.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -22,7 +23,33 @@
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
-    "dev": "vitest watch"
+    "dev": "vitest watch",
+    "prepublishOnly": "pnpm build && pnpm test"
+  },
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "keywords": [
+    "bonk.io",
+    "bonkio",
+    "bonk",
+    "socket.io",
+    "game-bot",
+    "headless",
+    "typescript",
+    "bot",
+    "automation",
+    "websocket"
+  ],
+  "author": "brenoluizdev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brenoluizdev/bonktools.git"
+  },
+  "homepage": "https://github.com/brenoluizdev/bonktools#readme",
+  "bugs": {
+    "url": "https://github.com/brenoluizdev/bonktools/issues"
   },
   "dependencies": {
     "eventemitter3": "^5.0.4",

@@ -1,6 +1,32 @@
-# @bonktools/core
+# bonktools
 
-Biblioteca TypeScript para conectar ao bonk.io de forma headless via Socket.IO, sem browser. Expõe três camadas: **Transport** (socket bruto), **BonkRoom** (sala individual com estado e eventos) e **BonkSession** (pool de salas com reconcile automático).
+[![npm version](https://img.shields.io/npm/v/bonktools.svg)](https://www.npmjs.com/package/bonktools)
+[![CI](https://github.com/brenoluizdev/bonktools/actions/workflows/ci.yml/badge.svg)](https://github.com/brenoluizdev/bonktools/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D20.18.1-brightgreen)](https://nodejs.org)
+
+Cliente TypeScript **headless** para [bonk.io](https://bonk.io) — conecta direto via Socket.IO, sem browser. Crie e gerencie salas, entre em salas existentes, escute o roster e os eventos de partida em tempo real, e rode bots 24h com reconexão automática.
+
+**Por que headless?** Automatizar o bonk.io com Puppeteer/Playwright exige um browser completo (~300 MB de RAM, headless instável, tela virtual no Linux). `bonktools` fala o protocolo Socket.IO do jogo diretamente — **menos de 15 MB de RAM por sala**, sem Chromium, sem Xvfb, sem depender de seletores de UI que quebram a cada atualização do client.
+
+---
+
+## Índice
+
+- [Arquitetura em camadas](#arquitetura-em-camadas)
+- [Instalação](#instalação)
+- [Autenticação](#autenticação)
+- [Criando uma sala — `createRoom()`](#criando-uma-sala--createroom)
+- [Entrando em uma sala — `joinRoom()`](#entrando-em-uma-sala--joinroom)
+- [`BonkRoom` — eventos e métodos](#bonkroom--eventos-e-métodos)
+- [Reconexão automática](#reconexão-automática)
+- [`BonkSession` — pool de salas](#bonksession--pool-de-salas)
+- [Tratamento de erros](#tratamento-de-erros)
+- [Decisões técnicas](#decisões-técnicas)
+- [Notas de segurança](#notas-de-segurança)
+- [Disclaimer](#disclaimer)
+- [Contribuindo](#contribuindo)
+- [Licença](#licença)
 
 ---
 
@@ -24,10 +50,14 @@ BonkSession
 ## Instalação
 
 ```bash
-pnpm add @bonktools/core
+npm install bonktools
+# ou
+pnpm add bonktools
+# ou
+yarn add bonktools
 ```
 
-**Requisitos:** Node.js >= 20.18.1. O pacote usa ESM (`"type": "module"`).
+**Requisitos:** Node.js >= 20.18.1. O pacote usa ESM (`"type": "module"`), com build CJS disponível para `require()`.
 
 ---
 
@@ -36,9 +66,9 @@ pnpm add @bonktools/core
 A lib suporta dois modos:
 
 ```ts
-import type { AuthOptions } from '@bonktools/core';
+import type { AuthOptions } from 'bonktools';
 
-// Conta registrada (recomendado para 24h)
+// Conta registrada (recomendado para bots de longa duração)
 const auth: AuthOptions = {
   type: 'registered',
   username: 'meu_usuario',
@@ -52,16 +82,16 @@ const auth: AuthOptions = {
 };
 ```
 
-Com `type: 'registered'`, a lib faz uma chamada HTTP para `bonk2.io/scripts/login_legacy.php` e obtém um token de sessão. O token é reusado em todas as salas da mesma `BonkSession`.
+Com `type: 'registered'`, a lib faz uma chamada HTTP para o endpoint de login do bonk.io e obtém um token de sessão. O token é reusado em todas as salas da mesma `BonkSession`.
 
 ---
 
 ## Criando uma sala — `createRoom()`
 
-A função mais direta. Retorna um `BonkRoom` já conectado e ativo (aguarda o packet 49 `SHARE_LINK` do servidor antes de resolver).
+A função mais direta. Retorna um `BonkRoom` já conectado e ativo (aguarda o packet `SHARE_LINK` do servidor antes de resolver).
 
 ```ts
-import { createRoom } from '@bonktools/core';
+import { createRoom } from 'bonktools';
 
 const room = await createRoom({
   auth: { type: 'registered', username: '...', password: '...' },
@@ -69,7 +99,7 @@ const room = await createRoom({
     roomName: 'Minha Sala',
     password: '',         // string vazia = sem senha
     maxPlayers: 6,
-    mode: 'b',            // 'b'=classic, 'ar'=arrows, 'ard'=arrowsdeath, 'sp'=simple, etc.
+    mode: 'b',            // 'b'=classic, 'ar'=arrows, 'ard'=arrows death, 'sp'=grapple, 'v'=vtol, 'f'=football
     rounds: 3,
   },
   hidden: false,          // aparece na lista pública
@@ -112,17 +142,17 @@ interface DesiredRoomState {
 ## Entrando em uma sala — `joinRoom()`
 
 ```ts
-import { joinRoom } from '@bonktools/core';
+import { joinRoom } from 'bonktools';
 
 // Via URL pública
 const room = await joinRoom('https://bonk.io/123456abcde', {
   auth: { type: 'registered', username: '...', password: '...' },
-  role: 'host',       // 'host' (time=1) ou 'spectator' (time=0)
+  role: 'host',       // 'host' (time=1) ou 'spectator' (time=0, apenas o time inicial requisitado)
   password: '',       // senha da sala, se houver
 });
 ```
 
-A lib parseia a URL, chama `autojoin.php` para resolver o servidor e depois conecta. Resolve após o packet 3 (`ROOM_JOIN`), ou rejeita com `RoomJoinTimeoutError`.
+A lib parseia a URL, resolve o servidor e depois conecta. Resolve após o packet `ROOM_JOIN`, ou rejeita com `RoomJoinTimeoutError`.
 
 Também aceita um `ResolvedRoomAddress` já pronto (sem chamada HTTP):
 
@@ -132,6 +162,8 @@ const room = await joinRoom(
   { auth, role: 'spectator' },
 );
 ```
+
+> **Nota:** `role: 'spectator'` define apenas o time inicial requisitado no `JOIN_ROOM` (mesmo comportamento do botão "Spectate" do client oficial) — o servidor ainda trata a conexão como um jogador normal daí em diante. Qualquer lógica de sala que decide quem joga (pick systems, etc.) precisa lidar com isso explicitamente.
 
 ---
 
@@ -148,6 +180,8 @@ const state = room.state;
 // state.players     — Map<id, PlayerData>
 // state.inGame      — boolean (partida em andamento)
 // state.teamsLocked — boolean
+
+room.currentMap; // blob LZ-String do mapa ativo, ou null (mapa padrão)
 ```
 
 ### Eventos principais
@@ -169,7 +203,7 @@ room.on('chat-message', (packet) => {
   console.log(`[${nome}]: ${packet.message}`);
 });
 
-// Link da sala disponível (packet 49)
+// Link da sala disponível
 room.on('share-link', (packet) => {
   console.log(`https://bonk.io/${packet.roomId}${packet.bypass}`);
 });
@@ -194,7 +228,7 @@ room.on('raw-packet', (packet) => {
 
 | Evento | Payload | Descrição |
 |---|---|---|
-| `room-join` | `RoomJoinPacket` | Bot entrou na sala (packet 3) |
+| `room-join` | `RoomJoinPacket` | Bot entrou na sala |
 | `room-created` | `RoomCreatedPacket` | Bot criou a sala |
 | `player-join` | `PlayerJoinPacket` | Jogador entrou |
 | `player-leave` | `PlayerLeavePacket` | Jogador saiu |
@@ -244,7 +278,7 @@ room.abortCountdown();
 
 room.setMode('b', 'b');    // engine, mode
 room.setRounds(5);
-room.setMap(lzStringBlob); // SEND_MAP_DELETE (22) + SEND_MAP_ADD (23)
+room.setMap(lzStringBlob); // troca o mapa ativo
 ```
 
 #### Moderação
@@ -292,7 +326,7 @@ const room = await createRoom({
 });
 ```
 
-Causas **terminais** (sem retry): `status-banned`, `status-room_full`, `max-retries-exceeded`.  
+Causas **terminais** (sem retry): `status-banned`, `status-room_full`, `max-retries-exceeded`.
 Causas **transitórias** (com retry): `socket-disconnect`.
 
 ---
@@ -302,7 +336,7 @@ Causas **transitórias** (com retry): `socket-disconnect`.
 Para rodar múltiplas salas com a mesma conta, use `BonkSession`. Ela compartilha o `AuthClient`, o token e aplica throttle de token-bucket entre criações.
 
 ```ts
-import { BonkSession } from '@bonktools/core';
+import { BonkSession } from 'bonktools';
 
 const session = new BonkSession({
   auth: { type: 'registered', username: '...', password: '...' },
@@ -394,79 +428,16 @@ interface RoomConfig {
 
 ---
 
-## Como o `room-manager` usa a lib
-
-O app `room-manager` é o consumidor de referência. O fluxo de inicialização:
-
-```
-rooms.json (declarativo)
-  → loadConfig() — valida via zod
-  → authFromEnv() — BONK_USERNAME + BONK_PASSWORD do ambiente
-  → new BonkSession(auth, throttle)
-  → session.getToken()
-  → session.startFromConfig(config)
-  → startRepl(session, rl)  — CLI interativa
-```
-
-Para rodar localmente:
-
-```bash
-# No diretório do room-manager
-cp .env.example .env
-# Editar .env com BONK_USERNAME e BONK_PASSWORD
-
-pnpm dev -- start --config rooms.example.json
-```
-
-O arquivo `rooms.json` tem o mesmo schema de `RoomManagerConfig`:
-
-```json
-{
-  "rooms": [
-    {
-      "id": "1",
-      "name": "ATLAS",
-      "password": "",
-      "maxPlayers": 6,
-      "mode": "b",
-      "rounds": 3,
-      "hidden": false
-    }
-  ],
-  "throttle": {
-    "maxConcurrentRooms": 10,
-    "roomCreationDelayMs": 3000,
-    "roomCreationJitterMs": 2000
-  }
-}
-```
-
-### REPL interativo
-
-Após o start, o REPL aceita:
-
-| Comando | Descrição |
-|---|---|
-| `list` | Lista todas as salas do pool com status |
-| `create <nome>` | Cria nova sala avulsa |
-| `remove <localId>` | Remove sala do pool |
-| `chat <localId> <mensagem>` | Envia chat em uma sala |
-| `kick <localId> <nome>` | Kicka jogador por nome |
-| `help` | Exibe ajuda |
-| `exit` | Encerra graciosamente (SIGTERM) |
-
----
-
 ## Tratamento de erros
 
 ```ts
-import { RoomCreationTimeoutError, RoomJoinTimeoutError } from '@bonktools/core';
+import { RoomCreationTimeoutError, RoomJoinTimeoutError } from 'bonktools';
 
 try {
   const room = await createRoom({ auth, desiredState: { /* ... */ } });
 } catch (err) {
   if (err instanceof RoomCreationTimeoutError) {
-    // Packet 49 (SHARE_LINK) não chegou em 10s
+    // SHARE_LINK não chegou dentro do timeout
   }
 }
 
@@ -474,10 +445,26 @@ try {
   const room = await joinRoom('https://bonk.io/...', { auth });
 } catch (err) {
   if (err instanceof RoomJoinTimeoutError) {
-    // Packet 3 (ROOM_JOIN) não chegou em 10s
+    // ROOM_JOIN não chegou dentro do timeout (ex: sala cheia)
   }
 }
 ```
+
+---
+
+## Decisões técnicas
+
+**Por que `socket.io-client@2` e não a versão mais recente?**
+O servidor bonk.io fala o protocolo Engine.IO 3 (`EIO=3`). O cliente v4 negocia `EIO=4` e não tem opção de downgrade — a conexão falha imediatamente no handshake. A versão 2.5.0 é a última da linha v2 e a única compatível.
+
+**Por que `undici` e não `fetch` nativo?**
+O bonk.io serve uma cadeia TLS Sectigo incompleta. O `fetch` nativo do Node.js não permite injetar uma CA customizada por requisição sem monkeypatch global. O `undici.Agent` permite configurar a CA Sectigo por cliente, sem afetar outras requisições HTTPS do processo.
+
+**Por que o CA Sectigo está bundlado?**
+Usar o TLS store padrão do Node.js rejeitaria a cadeia incompleta do bonk.io. Ao invés de desativar toda a verificação TLS globalmente (`NODE_TLS_REJECT_UNAUTHORIZED=0`), o projeto bundla a cadeia completa Sectigo e injeta apenas onde necessário.
+
+**Por que `EventEmitter3` e não o `EventEmitter` nativo?**
+EventEmitter3 tem tipagem genérica por evento (`EventEmitter<Events>`), o que permite `room.on('player-join', handler)` com o tipo do `handler` inferido corretamente pelo TypeScript.
 
 ---
 
@@ -487,3 +474,21 @@ try {
 - O token de sessão **nunca aparece em logs**.
 - TLS usa cadeia Sectigo customizada via `undici.Agent` — sem `NODE_TLS_REJECT_UNAUTHORIZED=0` global.
 - Variáveis de ambiente são lidas via `process.env` — nunca hardcode credenciais no código.
+
+---
+
+## Disclaimer
+
+`bonktools` é um cliente não-oficial, resultado de engenharia reversa do protocolo Socket.IO público do bonk.io. Não é afiliado, endossado ou mantido pela equipe do bonk.io. Use por sua conta e risco, respeitando os termos de serviço do jogo — o projeto existe para automação, bots e ferramentas legítimas (salas 24h, moderação, integração com outras plataformas), não para lag/DDoS, spam ou qualquer forma de abuso.
+
+---
+
+## Contribuindo
+
+Veja [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+---
+
+## Licença
+
+[MIT](./LICENSE)
