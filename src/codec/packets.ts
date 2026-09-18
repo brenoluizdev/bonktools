@@ -456,6 +456,15 @@ export const OUTGOING_PACKET_IDS = {
   SEND_START_COUNTDOWN: 36,
   SEND_ABORT_COUNTDOWN: 37,
   SEND_NO_HOST_SWAP: 50,
+  // INFORM_IN_GAME (packet 40, "Inform In Game"): documentado em
+  // https://github.com/UnmatchedBracket/DemystifyBonk/blob/main/Packets.md (out40)
+  // — não fazia parte do escopo original do bonktools. Enviado pelo host a um
+  // jogador específico (via `sid`, igual INFORM_IN_LOBBY) quando ele entra
+  // numa sala com uma partida JÁ ATIVA: carrega um snapshot do estado físico
+  // (`allData.state`) além de `gs`, pra esse jogador poder renderizar a
+  // partida em andamento sem precisar de um TRIGGER_START novo (que reiniciaria
+  // o jogo pra todo mundo). Ver BONK_PROTOCOL.md — "INFORM_IN_GAME".
+  INFORM_IN_GAME: 40,
 } as const;
 
 // ─── Payloads de outgoing packets Phase 3 ─────────────────────────────────────
@@ -602,5 +611,35 @@ export interface InformInLobbyPayload {
     mo: string;
     /** Bro assignment. [] = assignar por ID order (comportamento padrão do browser). */
     bal: Record<number, number> | unknown[];
+  };
+}
+
+/**
+ * Payload do INFORM_IN_GAME (outgoing 40) — enviado pelo host quando um jogador
+ * entra numa sala com partida já ativa, pra sincronizar o estado físico dele
+ * sem reiniciar o jogo pra todo mundo. Campo `allData` NÃO tem documentação
+ * oficial/confirmada — estrutura baseada no exemplo capturado em
+ * https://github.com/UnmatchedBracket/DemystifyBonk/blob/main/Packets.md (out40).
+ * EXPERIMENTAL: `state` aqui reusa o mesmo IS blob do TRIGGER_START ativo
+ * (não é um snapshot LIVE de posições atuais — o bonktools não roda física,
+ * então não tem como computar um snapshot de verdade). Ver BONK_PROTOCOL.md.
+ */
+export interface InformInGamePayload {
+  /** ID do jogador que acabou de entrar. */
+  sid: number;
+  allData: {
+    /** Blob de física — mesmo formato/uso do `is` de TRIGGER_START. */
+    state: string;
+    /** Não confirmado — exemplo real sempre mostrou 1. */
+    stateID: number;
+    /** Frame count — tick da partida no momento do envio (~30Hz). */
+    fc: number;
+    /** Inputs pendentes — vazio no exemplo capturado. */
+    inputs: unknown[];
+    /** Não confirmado — vazio no exemplo capturado. */
+    admin: unknown[];
+    gs: GameSettings;
+    /** Não confirmado — provável seed de RNG determinístico; vazio no exemplo. */
+    random: unknown[];
   };
 }

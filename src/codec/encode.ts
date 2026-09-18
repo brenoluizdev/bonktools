@@ -6,6 +6,7 @@ import type {
   SetRoomPasswordPayload,
   StartGamePayload,
   StartGameOptions,
+  InformInGamePayload,
 } from './packets.js';
 import { OUTGOING_PACKET_IDS } from './packets.js';
 import type { DesiredRoomState } from '../room/types.js';
@@ -74,4 +75,22 @@ export function encodeStartGame(
     ...(opts?.gs ? Object.fromEntries(Object.entries(opts.gs).filter(([, v]) => v !== undefined)) : {}),
   };
   return { is: opts?.is ?? '', gs };
+}
+
+/**
+ * Monta o payload do INFORM_IN_GAME (outgoing 40) — ver packets.ts. Reusa a
+ * mesma construção de `gs` do TRIGGER_START ativo (opts deve refletir o MESMO
+ * `is`/`bal` já em uso pela partida, não um novo).
+ */
+export function encodeInformInGame(
+  sid: number,
+  state: DesiredRoomState,
+  fc: number,
+  opts?: StartGameOptions,
+): InformInGamePayload {
+  const { is, gs } = encodeStartGame(state, opts);
+  return {
+    sid,
+    allData: { state: is, stateID: 1, fc, inputs: [], admin: [], gs, random: [] },
+  };
 }

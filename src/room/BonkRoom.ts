@@ -11,7 +11,7 @@ import { BonkTransport } from '../transport/BonkTransport.js';
 import { decodeWithZod } from '../codec/decode.js';
 import { TERMINAL_STATUS_CODES, OUTGOING_PACKET_IDS } from '../codec/packets.js';
 import type { StartGameOptions, InformInLobbyPayload } from '../codec/packets.js';
-import { encodeStartGame } from '../codec/encode.js';
+import { encodeStartGame, encodeInformInGame } from '../codec/encode.js';
 import type { StatusCode, IncomingPacket, UnknownPacket } from '../codec/packets.js';
 import {
   createEmptyRoomState,
@@ -95,6 +95,15 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
   private readonly desiredState: BonkRoomOptions['desiredState'];
   private readonly reconnectPolicy: ReconnectPolicy;
   private reconnectAttempts = 0;
+  /**
+   * Partida em andamento (opts do último startGame + instante do GAME_START).
+   * Usada no PLAYER_JOIN: o client só aceita UM pacote de dados iniciais
+   * (flag interna do client — o handler de INFORM_IN_GAME retorna se
+   * INFORM_IN_LOBBY já foi processado), então com partida ativa o host precisa
+   * mandar INFORM_IN_GAME EM VEZ DE INFORM_IN_LOBBY. Ver BONK_PROTOCOL.md.
+   */
+  private pendingGameOpts: StartGameOptions | undefined;
+  private activeGame: { opts: StartGameOptions | undefined; startedAt: number } | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private roomStatus: 'idle' | 'connecting' | 'active' | 'dead' | 'rebuilding' = 'idle';
   private readonly logger: Logger;
@@ -240,12 +249,30 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       this.logger.warn({ opts }, 'startGame: transport não conectado — packet descartado');
       return;
     }
+    this.pendingGameOpts = opts;
     const payload = encodeStartGame(this.desiredState, opts);
     this.logger.info(
       { engine: payload.gs.ga, mode: payload.gs.mo, rounds: payload.gs.wl, teams: payload.gs.tea, isLen: payload.is.length },
       '[GAME] startGame → enviando TRIGGER_START',
     );
     this.transport.sendPacket(OUTGOING_PACKET_IDS.TRIGGER_START, payload);
+  }
+
+  /**
+   * Sincroniza um jogador específico com a partida JÁ ATIVA (packet 40 —
+   * INFORM_IN_GAME), sem reiniciar o jogo pra ninguém. EXPERIMENTAL: ver
+   * documentação em `packets.ts`/`BONK_PROTOCOL.md` — o campo `allData` não
+   * tem confirmação oficial, e `opts.is` aqui deve ser o MESMO blob já usado
+   * pelo `startGame()` ativo (não um blob novo).
+   */
+  informInGame(sid: number, fc: number, opts?: StartGameOptions): void {
+    if (!this.transport) {
+      this.logger.warn({ sid }, 'informInGame: transport não conectado — packet descartado');
+      return;
+    }
+    const payload = encodeInformInGame(sid, this.desiredState, fc, opts);
+    this.logger.info({ sid, fc, stateLen: payload.allData.state.length }, '[GAME] informInGame → enviando INFORM_IN_GAME');
+    this.transport.sendPacket(OUTGOING_PACKET_IDS.INFORM_IN_GAME, payload);
   }
 
   /** Marca o PRÓPRIO bot como ready/not-ready (packet 16 — SET_READY). */
@@ -266,6 +293,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       this.logger.warn('stopGame: transport não conectado — packet descartado');
       return;
     }
+    this.activeGame = null;
     this.logger.info('[GAME] stopGame → enviando RETURN_TO_LOBBY');
     this.transport.sendPacket(OUTGOING_PACKET_IDS.RETURN_TO_LOBBY, undefined);
   }
@@ -486,10 +514,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       case 'PLAYER_JOIN':
         this._state = reducePlayerJoin(this._state, packet);
         this.logger.info({ playerId: packet.id, userName: packet.userName, team: packet.team }, '[ROSTER] PLAYER_JOIN');
-        this.emit('player-join', packet);
         // Protocolo obrigatório: host deve enviar INFORM_IN_LOBBY (out 11) ao jogador que entrou.
         // Sem esse packet, o bonk.io não entrega "Initial data" ao jogador → timeout no cliente.
-        if (this._state.myId !== null && this._state.myId === this._state.hostId) {
+        if (this._state.myId !== null && this._state.myId === this._state.hostId && this.activeGame?.opts?.is) {
+          // Partida ativa: INFORM_IN_GAME substitui o INFORM_IN_LOBBY (o client ignora o
+          // segundo pacote inicial). fc estimado por tempo desde o GAME_START (~30Hz).
+          const fc = Math.max(0, Math.round((Date.now() - this.activeGame.startedAt) / (1000 / 30)));
+          this.informInGame(packet.id, fc, this.activeGame.opts);
+        } else if (this._state.myId !== null && this._state.myId === this._state.hostId) {
           const balances: Record<number, number> = {};
           for (const [id, player] of this._state.players) {
             if (player.balance) {
@@ -530,6 +562,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
           };
           this.transport?.sendPacket(OUTGOING_PACKET_IDS.INFORM_IN_LOBBY, informPayload);
         }
+        this.emit('player-join', packet);
         break;
 
       case 'PLAYER_LEAVE':
@@ -611,12 +644,14 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
       case 'GAME_END':
         this.logger.info('[GAME] GAME_END recebido do servidor');
+        this.activeGame = null;
         this._state = reduceGameEnd(this._state);
         this.emit('game-end', packet);
         break;
 
       case 'GAME_START':
         this.logger.info('[GAME] GAME_START recebido do servidor');
+        this.activeGame = { opts: this.pendingGameOpts, startedAt: Date.now() };
         this._state = reduceGameStart(this._state);
         this.emit('game-start', packet);
         break;
