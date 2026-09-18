@@ -1,0 +1,330 @@
+/**
+ * PeerBrokerClient — participa do handshake WebRTC/PeerJS que o bonk.io usa pra
+ * sincronizar a partida ao vivo entre os clients (peer-to-peer, fora do Socket.IO).
+ *
+ * Descoberto via captura de tráfego real (não documentado antes): quando um jogador
+ * entra numa sala, o client dele abre uma conexão WebRTC com CADA peer já presente —
+ * inclusive o host, mesmo que o host nunca jogue. Sem essa lib, o host do bonktools
+ * nunca respondia a esse handshake: o OFFER endereçado a ele expirava
+ * (`{"type":"EXPIRE",...}`) e o jogador ficava sem conseguir renderizar a partida.
+ *
+ * Confirmado comparando: (a) host real (navegador) responde ANSWER normalmente, sem
+ * EXPIRE; (b) host bonktools sem esta lib, mesmo OFFER expira. Ver BONK_PROTOCOL.md.
+ *
+ * Escopo (Fase A): só completar o handshake de sinalização (OPEN/OFFER/ANSWER/
+ * CANDIDATE/HEARTBEAT) pra não deixar a conexão expirar. NÃO relaya dados de física
+ * pelo DataChannel — se isso for necessário (Fase B), é trabalho futuro.
+ *
+ * Protocolo: servidor PeerJS padrão, sem customização (key="peerjs", formato de
+ * id/token idêntico ao client PeerJS oficial) — confirmado inspecionando a URL de
+ * conexão real: wss://<server>.bonk.io/myapp/peerjs?key=peerjs&id=<peerID>&token=<token>.
+ */
+
+import { EventEmitter } from 'eventemitter3';
+import WebSocket from 'ws';
+import { RTCPeerConnection } from 'werift';
+import type { RTCDataChannel } from 'werift';
+import type { Logger } from 'pino';
+
+const HEARTBEAT_INTERVAL_MS = 5000;
+const RECONNECT_DELAY_MS = 3000;
+
+/**
+ * Fase B (EXPERIMENTAL, não confirmado): formato binário customizado observado
+ * no DataChannel, capturado ao vivo (ver BONK_PROTOCOL.md — "Sincronização de
+ * partida"). 12 bytes, 3 campos com marcador fixo 0xb1 + 1 char ascii + valor:
+ *   i (offset 3)   — 1 byte,  provável bitmask de teclas pressionadas
+ *   f (offset 7-8) — uint16 big-endian (tag 0xcd), tick a ~30Hz
+ *   c (offset 11)  — 1 byte,  contador sequencial da mensagem
+ *
+ * Hipótese a testar: o client trava em "awaiting first data" (ver
+ * BONK_PROTOCOL.md, Pitfall 10) esperando QUALQUER mensagem nesse formato do
+ * host, não uma mensagem específica — mandar um frame "neutro" (sem teclas,
+ * seq=0) assim que o canal abre pode ser suficiente pra destravar, sem
+ * precisar entender/relayar dados de física de verdade.
+ */
+function buildInputFrame(iValue: number, tick: number, seq: number): Buffer {
+  return Buffer.from([
+    0x83, 0xb1, 0x69, iValue & 0xff,
+    0xb1, 0x66, 0xcd, (tick >> 8) & 0xff, tick & 0xff,
+    0xb1, 0x63, seq & 0xff,
+  ]);
+}
+
+/** Gera um token de sessão no mesmo formato do client PeerJS oficial (~11 chars base36). */
+function generateToken(): string {
+  return Math.random().toString(36).slice(2);
+}
+
+interface OfferPayload {
+  sdp: { sdp: string; type: 'offer' };
+  type: 'data';
+  connectionId: string;
+  browser?: string;
+  label?: string;
+  reliable?: boolean;
+  serialization?: string;
+}
+
+interface CandidatePayload {
+  candidate: { candidate: string; sdpMid?: string | null; sdpMLineIndex?: number | null; usernameFragment?: string | null };
+  type: 'data';
+  connectionId: string;
+}
+
+type BrokerMessage =
+  | { type: 'OPEN' }
+  | { type: 'OFFER'; src: string; dst: string; payload: OfferPayload }
+  | { type: 'ANSWER'; src: string; dst: string; payload: { sdp: { sdp: string; type: 'answer' }; type: 'data'; connectionId: string } }
+  | { type: 'CANDIDATE'; src: string; dst: string; payload: CandidatePayload }
+  | { type: 'EXPIRE'; src: string; dst: string }
+  | { type: 'HEARTBEAT' }
+  | { type: string; [key: string]: unknown };
+
+interface PeerConnEntry {
+  pc: RTCPeerConnection;
+  connectionId: string;
+  channel: RTCDataChannel | null;
+}
+
+export interface PeerBrokerClientEvents {
+  open: [];
+  error: [Error];
+  close: [];
+  /** Mensagem crua recebida de um peer pelo DataChannel (frames de input/física). */
+  message: [src: string, data: Buffer];
+}
+
+/**
+ * Um `PeerBrokerClient` por sala — usa o mesmo `peerID` já enviado em CREATE_ROOM/
+ * JOIN_ROOM (`AuthClient.generatePeerID()`), então outros peers já sabem pra quem
+ * endereçar o OFFER assim que recebem o roster via PLAYER_JOIN/ROOM_JOIN.
+ */
+export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
+  private ws: WebSocket | null = null;
+  private readonly connections = new Map<string, PeerConnEntry>(); // key = src peerID
+  // Fase C: última mensagem crua recebida de cada peer, pra retransmitir pra
+  // quem conectar depois (ver `relayLastKnownState`).
+  private readonly lastMessage = new Map<string, Buffer>();
+  private heartbeatTimer: NodeJS.Timeout | null = null;
+  private closed = false;
+
+  constructor(
+    private readonly server: string,
+    private readonly peerID: string,
+    private readonly logger: Logger,
+  ) {
+    super();
+  }
+
+  connect(): void {
+    if (this.closed) return;
+    const token = generateToken();
+    const url = `wss://${this.server}.bonk.io/myapp/peerjs?key=peerjs&id=${this.peerID}&token=${token}`;
+    const ws = new WebSocket(url, { rejectUnauthorized: false });
+    this.ws = ws;
+
+    ws.on('open', () => {
+      this.startHeartbeat();
+    });
+
+    ws.on('message', (raw: WebSocket.RawData) => {
+      let msg: BrokerMessage;
+      try {
+        msg = JSON.parse(raw.toString()) as BrokerMessage;
+      } catch {
+        this.logger.warn({ raw: raw.toString().slice(0, 200) }, '[peer-broker] mensagem não-JSON ignorada');
+        return;
+      }
+      void this.handleMessage(msg);
+    });
+
+    ws.on('close', () => {
+      this.stopHeartbeat();
+      this.emit('close');
+      if (!this.closed) {
+        setTimeout(() => this.connect(), RECONNECT_DELAY_MS);
+      }
+    });
+
+    ws.on('error', (err: Error) => {
+      this.logger.warn({ err: err.message }, '[peer-broker] erro no socket do broker');
+      this.emit('error', err);
+    });
+  }
+
+  disconnect(): void {
+    this.closed = true;
+    this.stopHeartbeat();
+    for (const { pc } of this.connections.values()) {
+      pc.close();
+    }
+    this.connections.clear();
+    this.lastMessage.clear();
+    this.ws?.close();
+    this.ws = null;
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      this.send({ type: 'HEARTBEAT' });
+    }, HEARTBEAT_INTERVAL_MS);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  private send(msg: Record<string, unknown>): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(msg));
+    }
+  }
+
+  private async handleMessage(msg: BrokerMessage): Promise<void> {
+    switch (msg.type) {
+      case 'OPEN':
+        this.emit('open');
+        break;
+
+      case 'OFFER':
+        await this.handleOffer(msg as Extract<BrokerMessage, { type: 'OFFER' }>);
+        break;
+
+      case 'CANDIDATE':
+        this.handleCandidate(msg as Extract<BrokerMessage, { type: 'CANDIDATE' }>);
+        break;
+
+      case 'EXPIRE':
+        // Não deveria mais acontecer do nosso lado depois deste fix — pode acontecer
+        // se o peer remoto sair antes do handshake completar (condição normal).
+        this.logger.debug({ src: (msg as { src?: string }).src }, '[peer-broker] EXPIRE recebido');
+        break;
+
+      default:
+        // HEARTBEAT (eco do servidor, se houver) ou tipos não mapeados — sem ação.
+        break;
+    }
+  }
+
+  private async handleOffer(msg: Extract<BrokerMessage, { type: 'OFFER' }>): Promise<void> {
+    const { src, payload } = msg;
+    const existing = this.connections.get(src);
+    if (existing) {
+      existing.pc.close();
+      this.connections.delete(src);
+    }
+
+    const pc = new RTCPeerConnection();
+    const entry: PeerConnEntry = { pc, connectionId: payload.connectionId, channel: null };
+    this.connections.set(src, entry);
+
+    pc.onicecandidate = (event) => {
+      const candidate = event.candidate;
+      if (!candidate) return;
+      this.send({
+        type: 'CANDIDATE',
+        dst: src,
+        payload: {
+          candidate: {
+            candidate: candidate.candidate,
+            sdpMid: candidate.sdpMid,
+            sdpMLineIndex: candidate.sdpMLineIndex,
+          },
+          type: 'data',
+          connectionId: payload.connectionId,
+        },
+      });
+    };
+
+    pc.ondatachannel = (event) => {
+      this.logger.debug({ src }, '[peer-broker] data channel aberto');
+      const channel = event.channel;
+      entry.channel = channel;
+
+      // Fase C: cacheia a última mensagem crua recebida deste peer — é o que
+      // permite retransmitir o estado mais recente pra quem conectar depois,
+      // sem precisar entender o formato de física de verdade.
+      channel.onmessage = (msgEvent) => {
+        const data = typeof msgEvent.data === 'string' ? Buffer.from(msgEvent.data) : msgEvent.data;
+        this.lastMessage.set(src, data);
+        this.emit('message', src, data);
+      };
+
+      const sendBootstrap = (): void => {
+        try {
+          channel.send(buildInputFrame(0, Date.now() & 0xffff, 0));
+          this.logger.debug({ src }, '[peer-broker] frame de bootstrap (Fase B experimental) enviado');
+        } catch (err) {
+          this.logger.warn({ src, err: (err as Error).message }, '[peer-broker] falha enviando frame de bootstrap');
+        }
+        this.relayLastKnownState(src, channel);
+      };
+      if (channel.readyState === 'open') {
+        sendBootstrap();
+      } else {
+        channel.onopen = sendBootstrap;
+      }
+    };
+
+    try {
+      await pc.setRemoteDescription({ type: 'offer', sdp: payload.sdp.sdp });
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      this.send({
+        type: 'ANSWER',
+        dst: src,
+        payload: {
+          sdp: { sdp: pc.localDescription!.sdp, type: 'answer' },
+          type: 'data',
+          connectionId: payload.connectionId,
+        },
+      });
+    } catch (err) {
+      this.logger.warn({ src, err: (err as Error).message }, '[peer-broker] falha respondendo OFFER');
+      pc.close();
+      this.connections.delete(src);
+    }
+  }
+
+  /**
+   * Fase C (EXPERIMENTAL): retransmite pro peer recém-conectado (`newSrc`) a última
+   * mensagem crua que recebemos de CADA outro peer já conectado — sem decodificar
+   * nada. Hipótese: um espectador que entra depois de uma partida já ativa fica
+   * preso em "awaiting first data" (ver BONK_PROTOCOL.md, Pitfall 10) porque nunca
+   * recebe física de ninguém; o host, por já estar conectado a todo mundo via
+   * malha completa, pode servir de "cache" e entregar um retrato do estado mais
+   * recente sem precisar reiniciar a partida pra todo mundo (alternativa ao
+   * restart forçado no PickController).
+   */
+  private relayLastKnownState(newSrc: string, newChannel: RTCDataChannel): void {
+    for (const [otherSrc, buf] of this.lastMessage) {
+      if (otherSrc === newSrc) continue;
+      try {
+        newChannel.send(buf);
+        this.logger.debug(
+          { newSrc, fromSrc: otherSrc, bytes: buf.length },
+          '[peer-broker] estado retransmitido (Fase C experimental)',
+        );
+      } catch (err) {
+        this.logger.warn({ newSrc, fromSrc: otherSrc, err: (err as Error).message }, '[peer-broker] falha retransmitindo estado');
+      }
+    }
+  }
+
+  private handleCandidate(msg: Extract<BrokerMessage, { type: 'CANDIDATE' }>): void {
+    const entry = this.connections.get(msg.src);
+    if (!entry) return;
+    const c = msg.payload.candidate;
+    void entry.pc.addIceCandidate({
+      candidate: c.candidate,
+      sdpMid: c.sdpMid ?? undefined,
+      sdpMLineIndex: c.sdpMLineIndex ?? undefined,
+    });
+  }
+}

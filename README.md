@@ -21,6 +21,7 @@ Cliente TypeScript **headless** para [bonk.io](https://bonk.io) — conecta dire
 - [`BonkRoom` — eventos e métodos](#bonkroom--eventos-e-métodos)
 - [Reconexão automática](#reconexão-automática)
 - [`BonkSession` — pool de salas](#bonksession--pool-de-salas)
+- [Anti-AFK](#anti-afk)
 - [Tratamento de erros](#tratamento-de-erros)
 - [Registro público de IS blobs](#registro-público-de-is-blobs)
 - [Decisões técnicas](#decisões-técnicas)
@@ -426,6 +427,19 @@ interface RoomConfig {
 | `active` | sala criada e viva |
 | `dead-transient` | morta — será recriada com throttle |
 | `dead-terminal` | morta permanentemente (ban, sala cheia, retries esgotados) |
+
+---
+
+## Anti-AFK
+
+```ts
+room.enableAntiAfk();                          // 12 s sem se mexer nem falar no chat (padrão)
+room.on('player-afk',  (id) => room.kickPlayer(id));
+room.on('player-back', (id) => room.chat(`jogador ${id} voltou`));
+room.isAfk(playerId);                          // consulta pontual
+```
+
+Só vigia jogadores em time durante a partida (espectadores e o bot são ignorados). Opções: `enableAntiAfk({ thresholdMs, checkIntervalMs })`. O movimento é detectado pelos frames de input via WebRTC (evento `peer-input`); o chat, pelo Socket.IO.
 
 ---
 

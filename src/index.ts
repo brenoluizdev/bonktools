@@ -67,9 +67,12 @@ export type {
 
 // Room — Phase 2
 export { BonkRoom } from './room/BonkRoom.js';
+export { AFK_THRESHOLD_MS } from './room/AntiAfk.js';
+export type { AntiAfkOptions } from './room/AntiAfk.js';
 export type {
   BonkRoomOptions,
   BonkRoomEvents,
+  PeerInputEvent,
   DesiredRoomState,
   RoomDeadReason,
 } from './room/types.js';

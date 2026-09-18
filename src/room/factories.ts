@@ -133,6 +133,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
     if (transport) {
       room = new BonkRoom({
         desiredState,
+        peerID,
         transport,
         ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
         ...(logger !== undefined ? { logger } : {}),
@@ -146,6 +147,7 @@ export async function createRoom(opts: CreateRoomOptions): Promise<BonkRoom> {
       };
       room = new BonkRoom({
         desiredState,
+        peerID,
         transportOptions,
         ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
         ...(logger !== undefined ? { logger } : {}),
@@ -269,6 +271,7 @@ export async function joinRoom(
     if (transport) {
       room = new BonkRoom({
         desiredState,
+        peerID,
         transport,
         ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
         ...(logger !== undefined ? { logger } : {}),
@@ -282,6 +285,7 @@ export async function joinRoom(
       };
       room = new BonkRoom({
         desiredState,
+        peerID,
         transportOptions,
         ...(reconnectPolicy !== undefined ? { reconnectPolicy } : {}),
         ...(logger !== undefined ? { logger } : {}),
