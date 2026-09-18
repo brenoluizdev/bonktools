@@ -282,6 +282,11 @@ export function reduceGameStart(state: RoomState): RoomState {
   return { ...state, inGame: true };
 }
 
+/** Times travados/destravados (packet 19 recebido, ou lock/unlock local do host). */
+export function reduceTeamsLocked(state: RoomState, locked: boolean): RoomState {
+  return { ...state, teamsLocked: locked };
+}
+
 export function reduceGameEnd(state: RoomState): RoomState {
   return { ...state, inGame: false };
 }

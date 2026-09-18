@@ -21,6 +21,7 @@ Cliente TypeScript **headless** para [bonk.io](https://bonk.io) — conecta dire
 - [`BonkRoom` — eventos e métodos](#bonkroom--eventos-e-métodos)
 - [Reconexão automática](#reconexão-automática)
 - [`BonkSession` — pool de salas](#bonksession--pool-de-salas)
+- [Travar times](#travar-times)
 - [Anti-AFK](#anti-afk)
 - [Tratamento de erros](#tratamento-de-erros)
 - [Registro público de IS blobs](#registro-público-de-is-blobs)
@@ -427,6 +428,18 @@ interface RoomConfig {
 | `active` | sala criada e viva |
 | `dead-transient` | morta — será recriada com throttle |
 | `dead-terminal` | morta permanentemente (ban, sala cheia, retries esgotados) |
+
+---
+
+## Travar times
+
+```ts
+room.lockTeams();     // jogadores não conseguem mais trocar de time nem sair para o spec
+room.unlockTeams();  // libera de novo
+room.state.teamsLocked; // estado atual
+```
+
+Só o host pode chamar (de outro cliente é ignorado com um aviso). Com os times travados **só o host move jogadores** (`room.setTeam(id, team)` continua funcionando). Quem entra depois do lock já vê a sala travada, e o lock é reaplicado sozinho se a sala for reconstruída (`room-rebuilt`). `setTeamLock(boolean)` continua disponível; `lockTeams`/`unlockTeams` são os atalhos.
 
 ---
 
