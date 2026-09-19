@@ -23,6 +23,8 @@ export type {
 // Codec
 export { decode, decodeWithZod } from './codec/decode.js';
 export { encodeTimesync, encodeStartGame } from './codec/encode.js';
+export { decodeInitialState, encodeInitialState, remapInitialStatePlayers } from './codec/initialState.js';
+export type { InitialState } from './codec/initialState.js';
 export { INCOMING_PACKET_IDS, OUTGOING_PACKET_IDS, TERMINAL_STATUS_CODES, RATE_LIMIT_CODES } from './codec/packets.js';
 export type {
   TimesyncRequest,
