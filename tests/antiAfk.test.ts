@@ -77,6 +77,25 @@ describe('AntiAfk', () => {
     expect(afk.isAfk(1)).toBe(true);
   });
 
+  it('input pelo Socket.IO (pacote 7) também zera o relógio', () => {
+    clock = 10 * S;
+    bus.emit('raw-packet', { type: 'UNKNOWN', raw: [7, 1, { i: 2, f: 300, c: 0 }] });
+    clock = 21 * S;
+    expect(afk.isAfk(1)).toBe(false);
+    clock = 22 * S;
+    expect(afk.isAfk(1)).toBe(true);
+  });
+
+  it('tecla segurada (sem novos eventos) conta como atividade', () => {
+    bus.emit('raw-packet', { type: 'UNKNOWN', raw: [7, 1, { i: 2, f: 100, c: 0 }] });
+    clock = 30 * S; // 30 s com a tecla direita apertada
+    vi.advanceTimersByTime(1000);
+    expect(afk.isAfk(1)).toBe(false);
+    bus.emit('raw-packet', { type: 'UNKNOWN', raw: [7, 1, { i: 0, f: 900, c: 1 }] }); // soltou
+    clock = 43 * S;
+    expect(afk.isAfk(1)).toBe(true);
+  });
+
   it('mensagem no chat zera o relógio', () => {
     clock = 11 * S;
     bus.emit('chat-message', { id: 2 });

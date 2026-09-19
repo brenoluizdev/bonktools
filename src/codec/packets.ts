@@ -388,6 +388,8 @@ export const INCOMING_PACKET_IDS = {
   PLAYER_JOIN: 4,
   PLAYER_LEAVE: 5,
   HOST_LEAVE: 6,
+  /** Input de outro jogador (`[7, playerId, {i, f, c}]`). Sem schema: chega como UnknownPacket no `raw-packet`. */
+  PLAYER_INPUT: 7,
   READY_CHANGE: 8,
   ALL_READY_RESET: 9,
   USERNAME_CHANGE: 12,

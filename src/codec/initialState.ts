@@ -5,7 +5,7 @@ import PSON from 'pson';
  * Codec do IS blob (`is` do TRIGGER_START / `state` do INFORM_IN_GAME).
  *
  * Formato (engenharia reversa do client, confirmado com round-trip byte a byte):
- *   PSON (dicionário estático) → base64 → LZString.compressToBase64
+ *   PSON (dicionário estático) → base64 → LZString.compressToEncodedURIComponent
  *   → troca de maiúsc./minúsc. nos primeiros 101 caracteres.
  *
  * O estado guarda `players` e `discs` como arrays indexados pelo ID do jogador.
@@ -41,14 +41,18 @@ function swapHead(s: string): string {
 }
 
 export function decodeInitialState(is: string): InitialState {
-  const b64 = LZString.decompressFromBase64(swapHead(is));
+  const b64 = LZString.decompressFromEncodedURIComponent(swapHead(is));
   if (!b64) throw new Error('IS blob inválido (LZ-String)');
   return pson.decode(Buffer.from(b64, 'base64')) as InitialState;
 }
 
 export function encodeInitialState(state: InitialState): string {
-  const bytes = Buffer.from(pson.encode(state).toBuffer());
-  return swapHead(LZString.compressToBase64(bytes.toString('base64')));
+  let bytes = Buffer.from(pson.encode(state).toBuffer());
+  // O ByteBuffer do client não aceita o preenchimento "=" do base64 ("Illegal character code: 61") e descarta
+  // um grupo final incompleto. Completa com zeros (o PSON ignora bytes depois do valor raiz) até múltiplo de 3,
+  // assim o base64 sai exato e sem preenchimento.
+  while (bytes.length % 3 !== 0) bytes = Buffer.concat([bytes, Buffer.from([0])]);
+  return swapHead(LZString.compressToEncodedURIComponent(bytes.toString('base64')));
 }
 
 /**

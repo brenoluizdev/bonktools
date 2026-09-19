@@ -22,6 +22,7 @@ Cliente TypeScript **headless** para [bonk.io](https://bonk.io) — conecta dire
 - [Reconexão automática](#reconexão-automática)
 - [`BonkSession` — pool de salas](#bonksession--pool-de-salas)
 - [Travar times](#travar-times)
+- [Placar e vencedor](#placar-e-vencedor-football-experimental)
 - [Anti-AFK](#anti-afk)
 - [Tratamento de erros](#tratamento-de-erros)
 - [Registro público de IS blobs](#registro-público-de-is-blobs)
@@ -442,6 +443,28 @@ room.state.teamsLocked; // estado atual
 Só o host pode chamar (de outro cliente é ignorado com um aviso). Com os times travados **só o host move jogadores** (`room.setTeam(id, team)` continua funcionando). Quem entra depois do lock já vê a sala travada, e o lock é reaplicado sozinho se a sala for reconstruída (`room-rebuilt`). `setTeamLock(boolean)` continua disponível; `lockTeams`/`unlockTeams` são os atalhos.
 
 ---
+
+## Placar e vencedor (football, experimental)
+
+O bonk.io não informa placar nem vencedor ao host por pacote nenhum. O `ScoreTracker` roda a física do football do próprio client do jogo (baixada de bonk.io na primeira execução, não faz parte do pacote) num worker, alimentada com o estado inicial da partida e com os inputs dos jogadores. O resultado é idêntico ao dos clientes, sem navegador e sem ocupar vaga na sala.
+
+```ts
+import { ScoreTracker } from 'bonktools';
+
+const score = new ScoreTracker(room, { cacheDir: '.cache/bonk-client' });
+score.on('score', ({ team, scores }) => room.chat(`ponto do time ${team}: ${scores[3]} x ${scores[2]}`));
+score.on('match-winner', ({ team }) => console.log('venceu o time', team)); // 2 vermelho, 3 azul
+score.on('error', (e) => console.error('rastreamento desativado', e));
+await score.start();
+
+// Estado inicial pelo próprio jogo (qualquer nº de jogadores e ids, sem blobs capturados):
+const is = await score.buildInitialState([null, { id: 1, team: 3 }, { id: 2, team: 2 }]);
+room.startGame({ is: is ?? undefined });
+```
+
+- Só football; outros modos são ignorados. Vence quem chega a `gs.wl` (ou `maxScore`).
+- Depende de trechos do código ofuscado do client: se o jogo mudar, emite `error` e para.
+- Também exporta `decodeInitialState`, `encodeInitialState` e `remapInitialStatePlayers` (formato do IS blob documentado em `BONK_PROTOCOL.md`).
 
 ## Anti-AFK
 

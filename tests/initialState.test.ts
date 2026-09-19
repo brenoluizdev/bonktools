@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import LZString from 'lz-string';
 import { decodeInitialState, encodeInitialState, remapInitialStatePlayers } from '../src/codec/initialState.js';
 
 // Blob solo real (jogador id 1, azul), capturado de uma sala de football.
@@ -19,6 +20,26 @@ describe('IS blob', () => {
     expect(out.discs[4]).toMatchObject({ x: s.discs[1]!.x, y: s.discs[1]!.y });
     expect(out.players[1]).toBeNull();
     expect(out.discs[1]).toBeNull();
+  });
+
+  it('não gera base64 com preenchimento "=" (o client rejeita)', () => {
+    const s = decodeInitialState(SOLO);
+    for (let extra = 0; extra < 4; extra++) {
+      const players = Array.from({ length: 3 + extra }, (_, i) => (i === 0 ? null : { id: i, team: 2 }));
+      const blob = encodeInitialState({ ...s, players, discs: players.map((p) => (p ? { x: 1, y: 2, xv: 0, yv: 0, team: 2, kickReady: true } : null)) } as never);
+      const b64 = LZString.decompressFromEncodedURIComponent([...blob].map((c, i) => (i <= 100 ? (c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase()) : c)).join(''));
+      expect(b64).not.toContain('=');
+      expect((b64 as string).length % 4).toBe(0); // grupos completos: nada é descartado pelo decoder do client
+      expect(decodeInitialState(blob).players.length).toBe(players.length);
+    }
+  });
+
+  it('o blob só usa o alfabeto URI-safe (o client decodifica com decompressFromEncodedURIComponent)', () => {
+    const s = decodeInitialState(SOLO);
+    for (let seed = 0; seed < 300; seed++) {
+      const blob = encodeInitialState({ ...s, seed, players: [null, null, { id: 2, team: 3 }], discs: [null, null, { x: 10 + seed / 7, y: 22.7, xv: 0, yv: 0, team: 3, kickReady: true }] } as never);
+      expect(blob).toMatch(/^[A-Za-z0-9+$-]+$/);
+    }
   });
 
   it('devolve o original se o blob não tem o corpo pedido', () => {

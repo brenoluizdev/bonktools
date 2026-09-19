@@ -29,6 +29,8 @@ export class AntiAfk {
   private readonly now: () => number;
   private readonly timer: NodeJS.Timeout;
   private inGame = false;
+  /** Última máscara de teclas de cada jogador (pacote 7): tecla segurada = jogando, mesmo sem novos eventos. */
+  private readonly held = new Map<number, number>();
 
   constructor(private readonly room: BonkRoom, options: AntiAfkOptions = {}) {
     this.thresholdMs = options.thresholdMs ?? AFK_THRESHOLD_MS;
@@ -40,6 +42,7 @@ export class AntiAfk {
     room.on('team-change', this.onTeamChange);
     room.on('chat-message', this.onChat);
     room.on('peer-input', this.onInput);
+    room.on('raw-packet', this.onRaw as never);
 
     this.timer = setInterval(this.check, options.checkIntervalMs ?? 1000);
     this.timer.unref();
@@ -69,8 +72,10 @@ export class AntiAfk {
     this.room.off('team-change', this.onTeamChange);
     this.room.off('chat-message', this.onChat);
     this.room.off('peer-input', this.onInput);
+    this.room.off('raw-packet', this.onRaw as never);
     this.lastActivity.clear();
     this.flagged.clear();
+    this.held.clear();
   }
 
   // ─── Internos ──────────────────────────────────────────────────────────────
@@ -82,6 +87,7 @@ export class AntiAfk {
   }
 
   private untrack(id: number): void {
+    this.held.delete(id);
     this.lastActivity.delete(id);
     this.flagged.delete(id);
   }
@@ -92,7 +98,18 @@ export class AntiAfk {
     if (this.flagged.delete(id)) this.room.emit('player-back', id);
   }
 
+  /** Input de outro jogador pelo Socket.IO (`[7, id, {i, f, c}]`): mais confiável que o WebRTC. */
+  private readonly onRaw = (pkt: { type: string; raw?: unknown[] }): void => {
+    if (pkt.type !== 'UNKNOWN' || !pkt.raw || pkt.raw[0] !== 7) return;
+    const id = pkt.raw[1];
+    if (typeof id !== 'number') return;
+    const data = pkt.raw[2] as { i?: number } | undefined;
+    this.held.set(id, typeof data?.i === 'number' ? data.i : 0);
+    this.markActive(id);
+  };
+
   private readonly check = (): void => {
+    for (const [id, keys] of this.held) if (keys !== 0) this.markActive(id);
     for (const id of this.getAfkPlayers()) {
       if (this.flagged.has(id)) continue;
       this.flagged.add(id);
@@ -102,6 +119,7 @@ export class AntiAfk {
 
   private readonly onGameStart = (): void => {
     this.inGame = true;
+    this.held.clear();
     this.lastActivity.clear();
     this.flagged.clear();
     for (const p of this.room.state.players.values()) this.track(p.id, p.team);
