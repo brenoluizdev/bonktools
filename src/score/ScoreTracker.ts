@@ -6,6 +6,7 @@ import path from 'node:path';
 import { decodeInitialState, encodeInitialState } from '../codec/initialState.js';
 import type { GameStartPacket } from '../codec/packets.js';
 import type { BonkRoom } from '../room/BonkRoom.js';
+import { simWorkerOptions } from './simSandbox.js';
 import { SIM_WORKER_SOURCE } from './simWorker.js';
 
 /** Arquivos do client do bonk.io de que o simulador precisa (local remoto relativo a `clientBaseUrl`). */
@@ -128,7 +129,7 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
       this.fail(e as Error);
       return;
     }
-    const worker = new Worker(SIM_WORKER_SOURCE, { eval: true, workerData: { dir: this.cacheDir } });
+    const worker = new Worker(SIM_WORKER_SOURCE, simWorkerOptions(this.cacheDir));
     this.worker = worker;
     worker.on('message', (m: { type: string; [k: string]: unknown }) => this.onWorker(m));
     worker.on('error', (e) => this.fail(e));
