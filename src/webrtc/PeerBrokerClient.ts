@@ -239,7 +239,7 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     for (const line of payload.sdp.sdp.split(/\r?\n/)) {
       if (!line.startsWith('a=candidate:')) continue;
       const c = parseIceCandidate(line.slice(2));
-      if (c) this.emit('network', { src, origin: 'offer', ...c });
+      if (c) this.safeEmitNetwork({ src, origin: 'offer', ...c });
     }
     const existing = this.connections.get(src);
     if (existing) {
@@ -251,16 +251,20 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     const entry: PeerConnEntry = { pc, connectionId: payload.connectionId, channel: null };
     this.connections.set(src, entry);
 
-    pc.connectionStateChange.subscribe((state) => {
-      if (state !== 'connected') return;
-      try {
-        const pair = pc.iceTransports[0]?.connection.nominated;
-        const rc = pair?.remoteCandidate;
-        if (rc) this.emit('network', { src, origin: 'selected', address: rc.host, port: rc.port, type: rc.type, protocol: rc.transport });
-      } catch (err) {
-        this.logger.debug({ src, err: (err as Error).message }, '[peer-broker] par ICE indisponível');
-      }
-    });
+    // Só observação (moderação): NUNCA pode atrapalhar o handshake, então qualquer falha aqui é engolida.
+    try {
+      pc.connectionStateChange?.subscribe((state) => {
+        if (state !== 'connected') return;
+        try {
+          const rc = pc.iceTransports[0]?.connection.nominated?.remoteCandidate;
+          if (rc) this.safeEmitNetwork({ src, origin: 'selected', address: rc.host, port: rc.port, type: rc.type, protocol: rc.transport });
+        } catch (err) {
+          this.logger.debug({ src, err: (err as Error).message }, '[peer-broker] par ICE indisponível');
+        }
+      });
+    } catch (err) {
+      this.logger.debug({ src, err: (err as Error).message }, '[peer-broker] não foi possível observar o estado da conexão');
+    }
 
     pc.onicecandidate = (event) => {
       const candidate = event.candidate;
@@ -356,12 +360,21 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     }
   }
 
+  /** Um ouvinte de `network` com defeito não pode derrubar o handshake. */
+  private safeEmitNetwork(info: PeerNetworkInfo): void {
+    try {
+      this.emit('network', info);
+    } catch (err) {
+      this.logger.warn({ err: (err as Error).message }, '[peer-broker] ouvinte de network falhou');
+    }
+  }
+
   private handleCandidate(msg: Extract<BrokerMessage, { type: 'CANDIDATE' }>): void {
     const entry = this.connections.get(msg.src);
     if (!entry) return;
     const c = msg.payload.candidate;
     const parsed = parseIceCandidate(c.candidate);
-    if (parsed) this.emit('network', { src: msg.src, origin: 'candidate', ...parsed });
+    if (parsed) this.safeEmitNetwork({ src: msg.src, origin: 'candidate', ...parsed });
     void entry.pc.addIceCandidate({
       candidate: c.candidate,
       sdpMid: c.sdpMid ?? undefined,
