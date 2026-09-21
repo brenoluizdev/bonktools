@@ -201,6 +201,15 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
           }
         }
       });
+      this.peerBroker.on('network', (info) => {
+        for (const player of this._state.players.values()) {
+          if (player.peerID === info.src) {
+            this.emit('peer-network', { playerId: player.id, ...info });
+            return;
+          }
+        }
+        this.emit('peer-network', { playerId: null, ...info }); // o handshake pode chegar antes do PLAYER_JOIN
+      });
       this.peerBroker.connect();
     }
   }

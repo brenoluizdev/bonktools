@@ -87,7 +87,30 @@ interface PeerConnEntry {
   channel: RTCDataChannel | null;
 }
 
+/** Endereço de rede de um peer visto no handshake WebRTC (só leitura; não é usado pelo protocolo). */
+export interface PeerNetworkInfo {
+  /** peerID do jogador (o mesmo do pacote de entrada). */
+  src: string;
+  /** De onde veio: linha `a=candidate` do OFFER, mensagem CANDIDATE, ou o par ICE ESCOLHIDO (o endereço real da conexão). */
+  origin: 'offer' | 'candidate' | 'selected';
+  /** IP (ou nome mDNS `xxxx.local` quando o navegador o oculta). */
+  address: string;
+  port: number;
+  /** host | srflx | prflx | relay */
+  type: string;
+  protocol: string;
+}
+
+/** Lê uma linha ICE (`candidate:1 1 udp 2122 1.2.3.4 5000 typ srflx ...`); null se malformada. */
+export function parseIceCandidate(line: string): Omit<PeerNetworkInfo, 'src' | 'origin'> | null {
+  const m = /candidate:\S+\s+\d+\s+(\S+)\s+\d+\s+(\S+)\s+(\d+)\s+typ\s+(\w+)/i.exec(line);
+  if (!m) return null;
+  return { protocol: m[1]!.toLowerCase(), address: m[2]!, port: Number(m[3]), type: m[4]!.toLowerCase() };
+}
+
 export interface PeerBrokerClientEvents {
+  /** Endereço de rede de um peer visto no handshake (candidatos e o par ICE escolhido). */
+  network: [info: PeerNetworkInfo];
   open: [];
   error: [Error];
   close: [];
@@ -213,6 +236,11 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
 
   private async handleOffer(msg: Extract<BrokerMessage, { type: 'OFFER' }>): Promise<void> {
     const { src, payload } = msg;
+    for (const line of payload.sdp.sdp.split(/\r?\n/)) {
+      if (!line.startsWith('a=candidate:')) continue;
+      const c = parseIceCandidate(line.slice(2));
+      if (c) this.emit('network', { src, origin: 'offer', ...c });
+    }
     const existing = this.connections.get(src);
     if (existing) {
       existing.pc.close();
@@ -222,6 +250,17 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     const pc = new RTCPeerConnection();
     const entry: PeerConnEntry = { pc, connectionId: payload.connectionId, channel: null };
     this.connections.set(src, entry);
+
+    pc.connectionStateChange.subscribe((state) => {
+      if (state !== 'connected') return;
+      try {
+        const pair = pc.iceTransports[0]?.connection.nominated;
+        const rc = pair?.remoteCandidate;
+        if (rc) this.emit('network', { src, origin: 'selected', address: rc.host, port: rc.port, type: rc.type, protocol: rc.transport });
+      } catch (err) {
+        this.logger.debug({ src, err: (err as Error).message }, '[peer-broker] par ICE indisponível');
+      }
+    });
 
     pc.onicecandidate = (event) => {
       const candidate = event.candidate;
@@ -321,6 +360,8 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     const entry = this.connections.get(msg.src);
     if (!entry) return;
     const c = msg.payload.candidate;
+    const parsed = parseIceCandidate(c.candidate);
+    if (parsed) this.emit('network', { src: msg.src, origin: 'candidate', ...parsed });
     void entry.pc.addIceCandidate({
       candidate: c.candidate,
       sdpMid: c.sdpMid ?? undefined,

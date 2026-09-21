@@ -77,6 +77,7 @@ export type {
   BonkRoomOptions,
   BonkRoomEvents,
   PeerInputEvent,
+  PeerNetworkEvent,
   DesiredRoomState,
   RoomDeadReason,
 } from './room/types.js';
