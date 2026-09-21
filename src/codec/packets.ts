@@ -626,18 +626,28 @@ export interface InformInLobbyPayload {
  * (não é um snapshot LIVE de posições atuais — o bonktools não roda física,
  * então não tem como computar um snapshot de verdade). Ver BONK_PROTOCOL.md.
  */
+/** Uma mudança de teclas de um jogador na partida: `p` = id do jogador, `f` = quadro, `i` = máscara de teclas. */
+export interface GameInput {
+  p: number;
+  f: number;
+  i: number;
+}
+
 export interface InformInGamePayload {
   /** ID do jogador que acabou de entrar. */
   sid: number;
   allData: {
     /** Blob de física — mesmo formato/uso do `is` de TRIGGER_START. */
     state: string;
-    /** Não confirmado — exemplo real sempre mostrou 1. */
+    /** Quadro a que o `state` se refere (o client oficial manda um checkpoint ~120 quadros atrás; aqui, 0 = estado inicial). */
     stateID: number;
     /** Frame count — tick da partida no momento do envio (~30Hz). */
     fc: number;
-    /** Inputs pendentes — vazio no exemplo capturado. */
-    inputs: unknown[];
+    /**
+     * Mudanças de teclas de cada jogador desde o quadro `stateID` até `fc` (`{p, f, i}`). SEM elas, quem entra
+     * simula a partir do estado inicial com todo mundo parado e nunca alcança os outros (os discos "voam").
+     */
+    inputs: GameInput[];
     /** Não confirmado — vazio no exemplo capturado. */
     admin: unknown[];
     gs: GameSettings;

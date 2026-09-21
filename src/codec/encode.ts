@@ -7,6 +7,7 @@ import type {
   StartGamePayload,
   StartGameOptions,
   InformInGamePayload,
+  GameInput,
 } from './packets.js';
 import { OUTGOING_PACKET_IDS } from './packets.js';
 import type { DesiredRoomState } from '../room/types.js';
@@ -87,10 +88,12 @@ export function encodeInformInGame(
   state: DesiredRoomState,
   fc: number,
   opts?: StartGameOptions,
+  inputs: GameInput[] = [],
 ): InformInGamePayload {
   const { is, gs } = encodeStartGame(state, opts);
+  // `state` é o estado INICIAL (quadro 0): o client refaz a partida de 0 até `fc` aplicando `inputs`.
   return {
     sid,
-    allData: { state: is, stateID: 1, fc, inputs: [], admin: [], gs, random: [] },
+    allData: { state: is, stateID: 0, fc, inputs, admin: [], gs, random: [] },
   };
 }

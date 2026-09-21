@@ -10,7 +10,7 @@ import LZString from 'lz-string';
 import { BonkTransport } from '../transport/BonkTransport.js';
 import { decodeWithZod } from '../codec/decode.js';
 import { TERMINAL_STATUS_CODES, OUTGOING_PACKET_IDS } from '../codec/packets.js';
-import type { StartGameOptions, InformInLobbyPayload } from '../codec/packets.js';
+import type { StartGameOptions, InformInLobbyPayload, GameInput } from '../codec/packets.js';
 import { encodeStartGame, encodeInformInGame } from '../codec/encode.js';
 import type { StatusCode, IncomingPacket, UnknownPacket } from '../codec/packets.js';
 import {
@@ -108,6 +108,15 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
    */
   private pendingGameOpts: StartGameOptions | undefined;
   private activeGame: { opts: StartGameOptions | undefined; startedAt: number } | null = null;
+  /**
+   * Mudanças de teclas da partida ativa (pacote 7, `{p, f, i}`). O client só troca MUDANÇAS de teclas (não posições),
+   * então quem entra com a partida em andamento precisa de todo o histórico para refazer a simulação até o presente
+   * (ver `informInGame`). Zerado a cada início/fim de partida.
+   */
+  private gameInputs: GameInput[] = [];
+  /** Teto do histórico (~1 h de partida com muita tecla); passando disso, para de gravar e avisa uma vez. */
+  private static readonly MAX_GAME_INPUTS = 200_000;
+  private gameInputsOverflow = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private roomStatus: 'idle' | 'connecting' | 'active' | 'dead' | 'rebuilding' = 'idle';
   private readonly logger: Logger;
@@ -308,9 +317,36 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       this.logger.warn({ sid }, 'informInGame: transport não conectado — packet descartado');
       return;
     }
-    const payload = encodeInformInGame(sid, this.desiredState, fc, this.withLockState(opts));
-    this.logger.info({ sid, fc, stateLen: payload.allData.state.length }, '[GAME] informInGame → enviando INFORM_IN_GAME');
+    // O histórico vai em ordem de quadro. `fc` nunca fica atrás do último quadro que os jogadores já enviaram
+    // (o relógio do host pode estar alguns quadros atrás dos clients).
+    const inputs = [...this.gameInputs].sort((a, b) => a.f - b.f);
+    const lastFrame = inputs.length ? (inputs[inputs.length - 1] as GameInput).f : 0;
+    const payload = encodeInformInGame(sid, this.desiredState, Math.max(fc, lastFrame), this.withLockState(opts), inputs);
+    this.logger.info(
+      { sid, fc: payload.allData.fc, inputs: inputs.length, stateLen: payload.allData.state.length },
+      '[GAME] informInGame → enviando INFORM_IN_GAME',
+    );
     this.transport.sendPacket(OUTGOING_PACKET_IDS.INFORM_IN_GAME, payload);
+  }
+
+  private resetGameInputs(): void {
+    this.gameInputs = [];
+    this.gameInputsOverflow = false;
+  }
+
+  /** Guarda uma mudança de teclas (`[7, idDoJogador, { i, f, c }]`) para reenviar a quem entrar depois. */
+  private recordGameInput(raw: unknown): void {
+    if (!Array.isArray(raw) || raw[0] !== 7) return;
+    const [, p, data] = raw as [number, unknown, { i?: unknown; f?: unknown } | undefined];
+    if (typeof p !== 'number' || !data || typeof data.i !== 'number' || typeof data.f !== 'number') return;
+    if (this.gameInputs.length >= BonkRoom.MAX_GAME_INPUTS) {
+      if (!this.gameInputsOverflow) {
+        this.gameInputsOverflow = true;
+        this.logger.warn({ max: BonkRoom.MAX_GAME_INPUTS }, '[GAME] histórico de teclas cheio: quem entrar agora pode ficar dessincronizado');
+      }
+      return;
+    }
+    this.gameInputs.push({ p, f: data.f, i: data.i });
   }
 
   /** Marca o PRÓPRIO bot como ready/not-ready (packet 16 — SET_READY). */
@@ -332,6 +368,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       return;
     }
     this.activeGame = null;
+    this.resetGameInputs();
     this.logger.info('[GAME] stopGame → enviando RETURN_TO_LOBBY');
     this.transport.sendPacket(OUTGOING_PACKET_IDS.RETURN_TO_LOBBY, undefined);
   }
@@ -591,6 +628,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
 
     // 2. Emitir raw-packet SEMPRE, antes de qualquer reducer (D-06)
     this.emit('raw-packet', packet as IncomingPacket | UnknownPacket);
+    if (this.activeGame && packet.type === 'UNKNOWN') this.recordGameInput((packet as UnknownPacket).raw);
 
     // 3. Routing por tipo de packet
     switch (packet.type) {
@@ -743,6 +781,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       case 'GAME_END':
         this.logger.info('[GAME] GAME_END recebido do servidor');
         this.activeGame = null;
+        this.resetGameInputs();
         this._state = reduceGameEnd(this._state);
         this.emit('game-end', packet);
         break;
@@ -750,6 +789,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       case 'GAME_START':
         this.logger.info('[GAME] GAME_START recebido do servidor');
         this.activeGame = { opts: this.pendingGameOpts, startedAt: Date.now() };
+        this.resetGameInputs();
         this._state = reduceGameStart(this._state);
         this.emit('game-start', packet);
         break;
