@@ -313,7 +313,10 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
     // de partidas anteriores) pra os clients rejeitarem como fora de ordem — foi exatamente o que
     // aconteceu no teste ao vivo: o bot parou de se mover depois que um jogador saiu e voltou.
     this.gameStartedAtMs = Date.now();
-    this.inputSeq = 0;
+    // Já o contador de sequência (`c`) NÃO zera: o navegador dos jogadores lembra o maior `c` que viu de
+    // cada jogador e descarta os menores. Zerando aqui, depois do 1º reinício (sala que recomeça a
+    // partida sozinha) o bot "parava" pra todo mundo até o `c` passar do valor da partida anterior —
+    // confirmado ao vivo em 2026-09-23 (com o `c` contínuo, 3 reinícios seguidos sem travar).
     if (!this.transport) {
       this.logger.warn({ opts }, 'startGame: transport não conectado — packet descartado');
       return;

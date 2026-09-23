@@ -226,6 +226,21 @@ describe('Phase 4 — Game Flow & Moderation', () => {
       room.startGame();
       expect(warnSpy).toHaveBeenCalled();
     });
+
+    it('partida nova zera o quadro (f) do input próprio, mas a sequência (c) continua', () => {
+      const transport = makeMockTransport();
+      const room = new BonkRoom({ desiredState: DESIRED_STATE_FIXTURE, transport, logger: SILENT_LOGGER });
+      room.startGame();
+      vi.advanceTimersByTime(2000);
+      const a = room.sendInput(2);
+      const b = room.sendInput(0);
+      expect(a.f).toBe(60);
+      expect([a.c, b.c]).toEqual([0, 1]);
+      room.startGame(); // reinício automático da sala
+      const c = room.sendInput(2);
+      expect(c.f).toBe(0);
+      expect(c.c).toBe(2); // zerar aqui fazia o navegador descartar os inputs do bot ("bot parado")
+    });
   });
 
   describe('GAME-02: stopGame', () => {
