@@ -1,20 +1,13 @@
 import { EventEmitter } from 'eventemitter3';
 import { Worker } from 'node:worker_threads';
-import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { decodeInitialState, encodeInitialState } from '../codec/initialState.js';
 import type { GameStartPacket } from '../codec/packets.js';
 import type { BonkRoom } from '../room/BonkRoom.js';
+import { ensureClientFiles } from './clientFiles.js';
 import { simWorkerOptions } from './simSandbox.js';
 import { SIM_WORKER_SOURCE } from './simWorker.js';
-
-/** Arquivos do client do bonk.io de que o simulador precisa (local remoto relativo a `clientBaseUrl`). */
-const CLIENT_FILES: ReadonlyArray<readonly [string, string]> = [
-  ['alpha2s.js', 'alpha2s.js'],
-  ['Box2D.js', 'physics/box2dweb/Box2DModuleGJMod.js'],
-  ['SafeTrig.js', 'SafeTrig.js'],
-];
 
 /** Times que pontuam no football (ids de time do bonk.io). */
 const SCORING_TEAMS = [2, 3, 4, 5] as const;
@@ -51,6 +44,12 @@ export interface MatchWinnerInfo {
   frame: number;
 }
 
+/** Estado físico completo da partida rastreada, emitido a cada tick (ver `ScoreTrackerOptions.tickMs`). */
+export interface StateInfo {
+  state: unknown;
+  frame: number;
+}
+
 export interface ScoreTrackerEvents {
   /** Simulador carregado. */
   ready: [];
@@ -58,6 +57,11 @@ export interface ScoreTrackerEvents {
   score: [info: ScoreInfo];
   /** Um time chegou ao limite de pontos (`maxScore`/`gs.wl`). Emitido uma vez por partida. */
   'match-winner': [info: MatchWinnerInfo];
+  /**
+   * Estado físico completo (bola, discos, placar...) a cada tick da partida ativa — pra quem precisa
+   * de mais que só o placar (ex.: alimentar uma política de RL em tempo real).
+   */
+  state: [info: StateInfo];
   /** Falha ao carregar ou simular (ex.: o client do jogo mudou). O rastreamento é desativado. */
   error: [error: Error];
 }
@@ -124,7 +128,7 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
 
   async start(): Promise<void> {
     try {
-      await this.ensureClientFiles();
+      await ensureClientFiles(this.cacheDir, this.baseUrl);
     } catch (e) {
       this.fail(e as Error);
       return;
@@ -166,6 +170,18 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
     });
   }
 
+  /**
+   * Injeta manualmente, na simulação local, um input que O PRÓPRIO HOST mandou (via
+   * `BonkRoom.sendInput`). O servidor não ecoa de volta pro remetente o pacote de input que ele mesmo
+   * enviou (só retransmite pros outros clientes) — sem isso, `handleRaw` (que só escuta pacotes
+   * RECEBIDOS do servidor) nunca vê o próprio input do host, e o disco dele fica congelado pra sempre
+   * na simulação, mesmo o servidor aplicando o movimento normalmente pros outros jogadores.
+   */
+  recordOwnInput(playerId: number, i: number, f: number, c = 0): void {
+    if (!this.active) return;
+    this.worker?.postMessage({ type: 'input', id: playerId, i, f, c });
+  }
+
   stop(): void {
     this.endMatch();
     this.room.off('game-start', this.onGameStart);
@@ -202,6 +218,8 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
           this.emit('match-winner', { team: winner, scores: info.scores, frame: info.frame });
         }
       }
+    } else if (m.type === 'tickState' && this.active) {
+      if (m['state'] != null) this.emit('state', { state: m['state'], frame: m['frame'] as number });
     }
   }
 
@@ -240,16 +258,5 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
     const [id, playerId, data] = pkt.raw as [number, number, { i?: number; f?: number; c?: number } | undefined];
     if (id !== 7 || typeof playerId !== 'number' || !data || typeof data.i !== 'number' || typeof data.f !== 'number') return;
     this.worker?.postMessage({ type: 'input', id: playerId, i: data.i, f: data.f, c: data.c ?? 0 });
-  }
-
-  private async ensureClientFiles(): Promise<void> {
-    fs.mkdirSync(this.cacheDir, { recursive: true });
-    for (const [name, remote] of CLIENT_FILES) {
-      const file = path.join(this.cacheDir, name);
-      if (fs.existsSync(file)) continue;
-      const res = await fetch(this.baseUrl + remote);
-      if (!res.ok) throw new Error(`falha ao baixar ${remote}: HTTP ${res.status}`);
-      fs.writeFileSync(file, Buffer.from(await res.arrayBuffer()));
-    }
   }
 }

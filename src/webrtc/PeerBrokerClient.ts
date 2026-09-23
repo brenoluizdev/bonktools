@@ -30,24 +30,27 @@ const HEARTBEAT_INTERVAL_MS = 5000;
 const RECONNECT_DELAY_MS = 3000;
 
 /**
- * Fase B (EXPERIMENTAL, não confirmado): formato binário customizado observado
- * no DataChannel, capturado ao vivo (ver BONK_PROTOCOL.md — "Sincronização de
- * partida"). 12 bytes, 3 campos com marcador fixo 0xb1 + 1 char ascii + valor:
- *   i (offset 3)   — 1 byte,  provável bitmask de teclas pressionadas
- *   f (offset 7-8) — uint16 big-endian (tag 0xcd), tick a ~30Hz
- *   c (offset 11)  — 1 byte,  contador sequencial da mensagem
+ * Fase B (EXPERIMENTAL): frame de input observado no DataChannel, capturado ao vivo (ver
+ * BONK_PROTOCOL.md — "Sincronização de partida"). É um mapa MessagePack de 3 chaves —
+ * `{ i: <uint8>, f: <uint16>, c: <uint8> }`:
+ *   i — bitmask de teclas pressionadas (ver `keys()` em score/simSandbox.ts)
+ *   f — tick a ~30Hz, big-endian
+ *   c — contador sequencial da mensagem
  *
- * Hipótese a testar: o client trava em "awaiting first data" (ver
- * BONK_PROTOCOL.md, Pitfall 10) esperando QUALQUER mensagem nesse formato do
- * host, não uma mensagem específica — mandar um frame "neutro" (sem teclas,
- * seq=0) assim que o canal abre pode ser suficiente pra destravar, sem
- * precisar entender/relayar dados de física de verdade.
+ * CORREÇÃO (confirmada contra um client real via console do navegador — a versão anterior
+ * derrubava o client com `BinaryPackFailure` em TODO frame recebido): a captura original leu o
+ * prefixo `0xb1` como "marcador fixo", mas em MessagePack real `0xa0-0xbf` é o header de string
+ * curta (`fixstr`) cujos 5 bits baixos codificam o TAMANHO da string — `0xb1` = 0xb1-0xa0 = 17
+ * bytes, não um marcador. Pra uma chave de 1 char ("i"/"f"/"c") o header correto é `0xa1`
+ * (fixstr de 1 byte). Os valores de `i` e `c` também precisam do tag `0xcc` (uint8) — sem ele,
+ * um valor >= 0x80 vira outro tipo MessagePack inteiramente (fixmap/fixarray/fixstr), não um
+ * inteiro positivo.
  */
 function buildInputFrame(iValue: number, tick: number, seq: number): Buffer {
   return Buffer.from([
-    0x83, 0xb1, 0x69, iValue & 0xff,
-    0xb1, 0x66, 0xcd, (tick >> 8) & 0xff, tick & 0xff,
-    0xb1, 0x63, seq & 0xff,
+    0x83, 0xa1, 0x69, 0xcc, iValue & 0xff,
+    0xa1, 0x66, 0xcd, (tick >> 8) & 0xff, tick & 0xff,
+    0xa1, 0x63, 0xcc, seq & 0xff,
   ]);
 }
 
@@ -174,6 +177,23 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
       this.logger.warn({ err: err.message }, '[peer-broker] erro no socket do broker');
       this.emit('error', err);
     });
+  }
+
+  /**
+   * Manda um frame de input (Fase B, ver `buildInputFrame`) pra TODOS os peers com DataChannel
+   * aberto — é como o bot transmite o próprio movimento (não confirmado em produção; só o frame de
+   * bootstrap com `i=0` já foi validado). Um canal com problema não pode derrubar os outros.
+   */
+  sendInput(iValue: number, frame: number, seq: number): void {
+    const buf = buildInputFrame(iValue, frame, seq);
+    for (const [src, { channel }] of this.connections) {
+      if (channel?.readyState !== 'open') continue;
+      try {
+        channel.send(buf);
+      } catch (err) {
+        this.logger.warn({ src, err: (err as Error).message }, '[peer-broker] falha enviando frame de input');
+      }
+    }
   }
 
   disconnect(): void {

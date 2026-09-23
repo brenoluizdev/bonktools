@@ -64,8 +64,12 @@ parentPort.on('message', (m) => {
       call('start', { state: m.state, gs: m.gs });
     } else if (m.type === 'input') {
       call('input', { id: m.id, i: m.i, f: m.f, c: m.c || 0 });
+    } else if (m.type === 'step') {
+      parentPort.postMessage({ type: 'stepped', reqId: m.reqId, result: call('step', { actions: m.actions, frames: m.frames || 1 }) });
     } else if (m.type === 'tick') {
-      for (const g of call('tick', { target: m.target })) parentPort.postMessage({ type: 'goal', team: g.team, scores: g.scores, frame: g.frame });
+      const result = call('tick', { target: m.target });
+      for (const g of result.goals) parentPort.postMessage({ type: 'goal', team: g.team, scores: g.scores, frame: g.frame });
+      parentPort.postMessage({ type: 'tickState', state: result.state, frame: result.frame });
     } else if (m.type === 'stop') {
       call('stop');
     }

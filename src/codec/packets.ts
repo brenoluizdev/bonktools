@@ -467,6 +467,11 @@ export const OUTGOING_PACKET_IDS = {
   // partida em andamento sem precisar de um TRIGGER_START novo (que reiniciaria
   // o jogo pra todo mundo). Ver BONK_PROTOCOL.md — "INFORM_IN_GAME".
   INFORM_IN_GAME: 40,
+  // PLAYER_INPUT (packet 4): mudança de teclas do PRÓPRIO jogador, `{i, f, c}` — mesmo shape do
+  // incoming PLAYER_INPUT (7), mas id diferente (namespaces distintos, ver nota acima). Descoberto
+  // capturando o WebSocket de um client real: `42[4,{"i":6,"f":11659,"c":49}]`. É isso que move o
+  // avatar do jogador pros outros clients — o DataChannel WebRTC sozinho não basta.
+  PLAYER_INPUT: 4,
 } as const;
 
 // ─── Payloads de outgoing packets Phase 3 ─────────────────────────────────────

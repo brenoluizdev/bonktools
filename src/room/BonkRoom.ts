@@ -124,6 +124,13 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
   private _shareLink: string | null = null;
   private peerBroker: PeerBrokerClient | null = null;
   private antiAfk: AntiAfk | null = null;
+  /**
+   * Contador de sequência do input próprio (ver `sendInput`) — incrementa 1 por packet enviado,
+   * como confirmado capturando o WebSocket de um client real (`c` sobe 1 a cada envio).
+   */
+  private inputSeq = 0;
+  /** Quando a partida ativa começou (Date.now()) — usado por `sendInput` pra calcular `f`. */
+  private gameStartedAtMs = 0;
   /** Intenção do host: sobrevive à reconstrução da sala (reaplicada no ROOM_CREATED). */
   private teamsLockDesired = false;
   private teamsLockRetry: NodeJS.Timeout | null = null;
@@ -301,6 +308,12 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
    * Passe opts.is com o blob capturado de uma sessão real (via BONK_INITIAL_STATE).
    */
   startGame(opts?: StartGameOptions): void {
+    // Cada partida nova zera o relógio de física do zero (ver score/simSandbox.ts: sim.cur.f começa
+    // em 0 a cada `start`). Sem resetar aqui, sendInput() ia mandar um `f` alto o bastante (herdado
+    // de partidas anteriores) pra os clients rejeitarem como fora de ordem — foi exatamente o que
+    // aconteceu no teste ao vivo: o bot parou de se mover depois que um jogador saiu e voltou.
+    this.gameStartedAtMs = Date.now();
+    this.inputSeq = 0;
     if (!this.transport) {
       this.logger.warn({ opts }, 'startGame: transport não conectado — packet descartado');
       return;
@@ -336,6 +349,42 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       '[GAME] informInGame → enviando INFORM_IN_GAME',
     );
     this.transport.sendPacket(OUTGOING_PACKET_IDS.INFORM_IN_GAME, payload);
+  }
+
+  /**
+   * Transmite uma MUDANÇA no input do PRÓPRIO bot. `i` é o mesmo bitmask de `keys(i)` em
+   * `score/simSandbox.ts` (left=1, right=2, up=4, down=8, action=16, action2=32).
+   *
+   * DESCOBERTA (capturando o WebSocket de um jogador real segurando cada tecla sozinha —
+   * confirma o bitmask acima 1:1): o que de fato move o avatar pros outros jogadores é o packet
+   * Socket.IO PLAYER_INPUT (outgoing 4, `{i, f, c}`) — ex. `42[4,{"i":2,"f":558,"c":0}]` ao apertar
+   * direita. O client real manda **um packet só na TRANSIÇÃO de estado** (aperta = 1 packet, solta =
+   * 1 packet) — nunca repete o mesmo `i` continuamente enquanto segura. Quem chama `sendInput`
+   * precisa fazer o mesmo (mandar só quando o bitmask muda), não a cada tick de um loop.
+   *
+   * `f` é o quadro da partida em ~30fps desde o `startGame()` ativo (mesma fórmula do `ScoreTracker`:
+   * `(Date.now() - início) * 30 / 1000`) — não um contador simples, senão o valor fica fora de
+   * sincronia com o relógio real da partida.
+   *
+   * O broadcast via WebRTC (`PeerBrokerClient.sendInput`, Fase B) sozinho NÃO é suficiente; mandamos
+   * os dois porque o client real parece fazer o mesmo (o WebRTC ao menos garante o "unstick" de quem
+   * está esperando o primeiro dado, ver Pitfall 10 em BONK_PROTOCOL.md).
+   *
+   * Devolve o `{i, f, c}` enviado: o servidor NÃO ecoa de volta pro próprio remetente o input que ele
+   * mesmo mandou (só retransmite pros outros clientes) — quem precisa saber o próprio input em tempo
+   * real (ex. `ScoreTracker.recordOwnInput`, pra alimentar a simulação local do host) não tem de onde
+   * ler isso de volta a não ser pelo valor de retorno daqui.
+   */
+  sendInput(i: number): { i: number; f: number; c: number } {
+    const frame = Math.floor(((Date.now() - this.gameStartedAtMs) * 30) / 1000);
+    const seq = this.inputSeq++;
+    if (this.transport) {
+      this.transport.sendPacket(OUTGOING_PACKET_IDS.PLAYER_INPUT, { i, f: frame, c: seq });
+    } else {
+      this.logger.warn({ i }, 'sendInput: transport não conectado — packet socket descartado');
+    }
+    this.peerBroker?.sendInput(i, frame, seq);
+    return { i, f: frame, c: seq };
   }
 
   private resetGameInputs(): void {

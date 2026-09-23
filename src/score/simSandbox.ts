@@ -189,8 +189,34 @@ export const DRIVER_SOURCE = String.raw`
         return '[]';
       },
       tick: function (json) {
-        if (!sim) return '[]';
-        return JSON.stringify(advance(JSON.parse(json).target));
+        if (!sim) return JSON.stringify({ goals: [], state: null, frame: 0 });
+        var goals = advance(JSON.parse(json).target);
+        return JSON.stringify({ goals: goals, state: sim.cur.state, frame: sim.cur.f });
+      },
+      // Avança exatamente 1 quadro sob controle total do chamador (sem fila de eventos nem
+      // rollback — esses existem só para absorver o atraso de rede das partidas ao vivo, ver
+      // "input"/"tick" acima). Usado pelo PhysicsSimulator para treino offline (RL).
+      step: function (json) {
+        if (!sim) return JSON.stringify({ state: null, frame: 0, goals: [] });
+        var m = JSON.parse(json);
+        var acts = m.actions || {};
+        var inputs = [];
+        for (var pid in acts) { if (Object.prototype.hasOwnProperty.call(acts, pid)) inputs[pid] = keys(acts[pid]); }
+        // "frames": mesmo input segurado por N quadros numa chamada só (action repeat do RL) — evita N idas e
+        // voltas worker<->processo e N serializações do estado inteiro.
+        var frames = Math.max(1, Math.min(60, (m.frames | 0) || 1));
+        var next = sim.cur.state;
+        var goals = [];
+        for (var n = 0; n < frames; n++) {
+          next = sim.inst.step(sim.cur.state, inputs, null, 30, sim.gs, 1);
+          sim.cur = { f: sim.cur.f + 1, state: next };
+          var scores = Array.from(next.scores || []);
+          for (var idx = 0; idx < scores.length; idx++) {
+            var v = scores[idx] || 0;
+            if (v > (sim.maxScores[idx] || 0)) { sim.maxScores[idx] = v; goals.push({ team: idx, scores: scores, frame: sim.cur.f }); }
+          }
+        }
+        return JSON.stringify({ state: next, frame: sim.cur.f, goals: goals });
       },
       stop: function () { sim = null; return '[]'; }
     }
