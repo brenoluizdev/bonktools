@@ -40,6 +40,51 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 describe('INFORM_IN_GAME (entrada tardia)', () => {
+  it('inclui as teclas do PRÓPRIO host (sala contra o bot: o servidor não devolve ao host o input dele)', () => {
+    const { room, t } = makeHost();
+    join(room, 1);
+    startGame(room);
+    room['gameStartedAtMs'] = Date.now();
+    vi.advanceTimersByTime(1000); // quadro 30
+    room.sendInput(2);
+    input(room, 1, 45, 1);
+    t.sendPacket.mockClear();
+    join(room, 2);
+    expect(informPackets(t)[0]!.allData.inputs).toEqual([
+      { p: 0, f: 30, i: 2 },
+      { p: 1, f: 45, i: 1 },
+    ]);
+  });
+
+  it('inclui as teclas que chegaram por WebRTC, e o mesmo input pelos dois caminhos entra uma vez só', () => {
+    const { room, t } = makeHost();
+    join(room, 1);
+    join(room, 2);
+    startGame(room);
+    vi.advanceTimersByTime(3000);
+    // i=6, f=40, c=1 no formato MessagePack do DataChannel
+    room['recordPeerGameInput'](1, Buffer.from([0x83, 0xa1, 0x69, 0xcc, 6, 0xa1, 0x66, 0xcd, 0, 40, 0xa1, 0x63, 0xcc, 1]));
+    input(room, 1, 40, 6, 1); // o mesmo input também pelo socket
+    input(room, 2, 50, 8);
+    t.sendPacket.mockClear();
+    join(room, 3);
+    expect(informPackets(t)[0]!.allData.inputs).toEqual([
+      { p: 1, f: 40, i: 6 },
+      { p: 2, f: 50, i: 8 },
+    ]);
+  });
+
+  it('frame de WebRTC fora de partida ou malformado não entra no histórico', () => {
+    const { room, t } = makeHost();
+    join(room, 1);
+    room['recordPeerGameInput'](1, Buffer.from([0x83, 0xa1, 0x69, 1, 0xa1, 0x66, 5, 0xa1, 0x63, 0]));
+    startGame(room);
+    room['recordPeerGameInput'](1, Buffer.from('lixo'));
+    t.sendPacket.mockClear();
+    join(room, 2);
+    expect(informPackets(t)[0]!.allData.inputs).toEqual([]);
+  });
+
   it('manda o histórico de teclas da partida, em ordem de quadro, com o estado inicial (stateID 0)', () => {
     const { room, t } = makeHost();
     join(room, 1);

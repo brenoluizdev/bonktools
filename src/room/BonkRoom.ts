@@ -32,6 +32,7 @@ import { defaultReconnectPolicy, computeBackoff } from './ReconnectPolicy.js';
 import { PeerBrokerClient } from '../webrtc/PeerBrokerClient.js';
 import { AntiAfk } from './AntiAfk.js';
 import type { AntiAfkOptions } from './AntiAfk.js';
+import { parseInputFrame } from '../webrtc/inputFrame.js';
 import type { BonkRoomEvents, BonkRoomOptions, RoomDeadReason } from './types.js';
 import type { RoomState } from './RoomState.js';
 import type { ReconnectPolicy } from './ReconnectPolicy.js';
@@ -114,6 +115,8 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
    * (ver `informInGame`). Zerado a cada início/fim de partida.
    */
   private gameInputs: GameInput[] = [];
+  /** Chaves `p:f:i` já no histórico: o mesmo input pode chegar pelo socket E pelo WebRTC. */
+  private gameInputKeys = new Set<string>();
   /** Teto do histórico (~1 h de partida com muita tecla); passando disso, para de gravar e avisa uma vez. */
   private static readonly MAX_GAME_INPUTS = 200_000;
   private gameInputsOverflow = false;
@@ -203,6 +206,7 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       this.peerBroker.on('message', (src, data) => {
         for (const player of this._state.players.values()) {
           if (player.peerID === src) {
+            this.recordPeerGameInput(player.id, data);
             this.emit('peer-input', { playerId: player.id, peerID: src, data });
             break;
           }
@@ -387,19 +391,33 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       this.logger.warn({ i }, 'sendInput: transport não conectado — packet socket descartado');
     }
     this.peerBroker?.sendInput(i, frame, seq);
+    // O servidor não devolve ao host o input dele mesmo: sem isto, quem entrasse com a partida em andamento refazia a
+    // simulação com o disco do host PARADO (sala contra o bot: tudo dessincronizava pra quem acabou de entrar).
+    if (this.activeGame && this._state.myId !== null) this.pushGameInput(this._state.myId, frame, i);
     return { i, f: frame, c: seq };
   }
 
   private resetGameInputs(): void {
     this.gameInputs = [];
+    this.gameInputKeys.clear();
     this.gameInputsOverflow = false;
   }
 
-  /** Guarda uma mudança de teclas (`[7, idDoJogador, { i, f, c }]`) para reenviar a quem entrar depois. */
-  private recordGameInput(raw: unknown): void {
-    if (!Array.isArray(raw) || raw[0] !== 7) return;
-    const [, p, data] = raw as [number, unknown, { i?: unknown; f?: unknown } | undefined];
-    if (typeof p !== 'number' || !data || typeof data.i !== 'number' || typeof data.f !== 'number') return;
+  /**
+   * Input que chegou por WebRTC: com a conexão P2P aberta o navegador manda SÓ por aqui, e sem gravar o histórico de
+   * quem entra depois ficava sem as teclas desse jogador. O WebRTC leva o quadro em 16 bits: recupera o resto pelo relógio.
+   */
+  private recordPeerGameInput(playerId: number, data: Buffer): void {
+    if (!this.activeGame) return;
+    const frame = parseInputFrame(data);
+    if (!frame) return;
+    const now = Math.round((Date.now() - this.activeGame.startedAt) / (1000 / 30));
+    this.pushGameInput(playerId, Math.max(0, frame.f + Math.round((now - frame.f) / 65536) * 65536), frame.i);
+  }
+
+  private pushGameInput(p: number, f: number, i: number): void {
+    const key = `${p}:${f}:${i}`;
+    if (this.gameInputKeys.has(key)) return;
     if (this.gameInputs.length >= BonkRoom.MAX_GAME_INPUTS) {
       if (!this.gameInputsOverflow) {
         this.gameInputsOverflow = true;
@@ -407,7 +425,16 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
       }
       return;
     }
-    this.gameInputs.push({ p, f: data.f, i: data.i });
+    this.gameInputKeys.add(key);
+    this.gameInputs.push({ p, f, i });
+  }
+
+  /** Guarda uma mudança de teclas (`[7, idDoJogador, { i, f, c }]`) para reenviar a quem entrar depois. */
+  private recordGameInput(raw: unknown): void {
+    if (!Array.isArray(raw) || raw[0] !== 7) return;
+    const [, p, data] = raw as [number, unknown, { i?: unknown; f?: unknown } | undefined];
+    if (typeof p !== 'number' || !data || typeof data.i !== 'number' || typeof data.f !== 'number') return;
+    this.pushGameInput(p, data.f, data.i);
   }
 
   /** Marca o PRÓPRIO bot como ready/not-ready (packet 16 — SET_READY). */
