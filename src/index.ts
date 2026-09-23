@@ -26,6 +26,8 @@ export { encodeTimesync, encodeStartGame } from './codec/encode.js';
 export { decodeInitialState, encodeInitialState, remapInitialStatePlayers } from './codec/initialState.js';
 export { ScoreTracker, winnerOf } from './score/ScoreTracker.js';
 export type { ScoreTrackerOptions, ScoreTrackerEvents, ScoreInfo, MatchWinnerInfo, StateInfo } from './score/ScoreTracker.js';
+export { parseInputFrame } from './webrtc/inputFrame.js';
+export type { InputFrame } from './webrtc/inputFrame.js';
 export { PhysicsSimulator } from './score/PhysicsSimulator.js';
 export type {
   PhysicsSimulatorOptions,

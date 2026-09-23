@@ -1,6 +1,6 @@
 {
   "name": "bonktools",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Headless TypeScript client for bonk.io — connects directly via Socket.IO, no browser required. Create/join rooms, manage rosters, and run 24/7 bots with automatic reconnection.",
   "type": "module",
   "main": "./dist/index.cjs",

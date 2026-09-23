@@ -5,6 +5,8 @@ import path from 'node:path';
 import { decodeInitialState, encodeInitialState } from '../codec/initialState.js';
 import type { GameStartPacket } from '../codec/packets.js';
 import type { BonkRoom } from '../room/BonkRoom.js';
+import type { PeerInputEvent } from '../room/types.js';
+import { parseInputFrame } from '../webrtc/inputFrame.js';
 import { ensureClientFiles } from './clientFiles.js';
 import { simWorkerOptions } from './simSandbox.js';
 import { SIM_WORKER_SOURCE } from './simWorker.js';
@@ -107,6 +109,9 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
   private readonly onGameStart = (pkt: GameStartPacket) => this.beginMatch(pkt.is ?? null, pkt.gs);
   private readonly onGameEnd = () => this.endMatch();
   private readonly onRaw = (pkt: { type: string; raw?: unknown[] }) => this.handleRaw(pkt);
+  private readonly onPeerInput = (ev: PeerInputEvent) => this.handlePeerInput(ev);
+  /** Últimos inputs vistos por jogador (o mesmo input pode chegar pelo socket E pelo WebRTC). */
+  private readonly seenInputs = new Map<number, string[]>();
 
   constructor(private readonly room: BonkRoom, private readonly opts: ScoreTrackerOptions = {}) {
     super();
@@ -141,6 +146,7 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
     this.room.on('game-start', this.onGameStart);
     this.room.on('game-end', this.onGameEnd);
     this.room.on('raw-packet', this.onRaw as never);
+    this.room.on('peer-input', this.onPeerInput as never);
   }
 
   /**
@@ -187,6 +193,7 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
     this.room.off('game-start', this.onGameStart);
     this.room.off('game-end', this.onGameEnd);
     this.room.off('raw-packet', this.onRaw as never);
+    this.room.off('peer-input', this.onPeerInput as never);
     void this.worker?.terminate();
     this.worker = null;
     this._ready = false;
@@ -248,6 +255,7 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
 
   private endMatch(): void {
     this.active = false;
+    this.seenInputs.clear();
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     this.worker?.postMessage({ type: 'stop' });
@@ -257,6 +265,33 @@ export class ScoreTracker extends EventEmitter<ScoreTrackerEvents> {
     if (!this.active || pkt.type !== 'UNKNOWN' || !pkt.raw) return;
     const [id, playerId, data] = pkt.raw as [number, number, { i?: number; f?: number; c?: number } | undefined];
     if (id !== 7 || typeof playerId !== 'number' || !data || typeof data.i !== 'number' || typeof data.f !== 'number') return;
-    this.worker?.postMessage({ type: 'input', id: playerId, i: data.i, f: data.f, c: data.c ?? 0 });
+    this.feedInput(playerId, data.i, data.f, data.c ?? 0);
+  }
+
+  /**
+   * Input que chegou direto do navegador por WebRTC. Com a conexão P2P aberta o navegador manda SÓ por aqui (nada
+   * pelo servidor): sem ler este caminho, o jogador ficava parado na simulação — o placar automático errava e o bot
+   * de RL (que "vê" o jogo por esta simulação) perseguia um adversário fantasma. Confirmado ao vivo em 2026-09-23 numa
+   * sala com IP público (o P2P fecha); atrás de NAT doméstico ele costuma falhar e tudo vem pelo socket.
+   */
+  private handlePeerInput(ev: PeerInputEvent): void {
+    if (!this.active) return;
+    const frame = parseInputFrame(ev.data);
+    if (!frame) return;
+    // O WebRTC leva o quadro em 16 bits: recupera os bits altos pelo relógio da partida.
+    const now = Math.floor(((Date.now() - this.startedAt) * 30) / 1000);
+    const f = frame.f + Math.round((now - frame.f) / 65536) * 65536;
+    this.feedInput(ev.playerId, frame.i, Math.max(0, f), frame.c);
+  }
+
+  /** Um input de jogador pra simulação, ignorando repetidos (mesmo input pelos dois caminhos). */
+  private feedInput(playerId: number, i: number, f: number, c: number): void {
+    const key = `${i}:${f & 0xffff}:${c & 0xff}`;
+    const seen = this.seenInputs.get(playerId) ?? [];
+    if (seen.includes(key)) return;
+    seen.push(key);
+    if (seen.length > 64) seen.shift();
+    this.seenInputs.set(playerId, seen);
+    this.worker?.postMessage({ type: 'input', id: playerId, i, f, c });
   }
 }
