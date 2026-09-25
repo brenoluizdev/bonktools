@@ -783,11 +783,15 @@ export class BonkRoom extends EventEmitter<BonkRoomEvents> {
         this.emit('player-join', packet);
         break;
 
-      case 'PLAYER_LEAVE':
+      case 'PLAYER_LEAVE': {
         this.logger.info({ playerId: packet.id }, '[ROSTER] PLAYER_LEAVE');
+        // Fecha a conexão P2P de quem saiu (antes ela ficava viva para sempre e a CPU da sala crescia sem parar).
+        const leaving = this._state.players.get(packet.id);
+        if (leaving?.peerID) this.peerBroker?.closePeer(leaving.peerID);
         this._state = reducePlayerLeave(this._state, packet);
         this.emit('player-leave', packet);
         break;
+      }
 
       case 'TEAM_CHANGE':
         this.logger.info({ playerId: packet.id, team: packet.team }, '[ROSTER] TEAM_CHANGE');

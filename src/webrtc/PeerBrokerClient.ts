@@ -88,7 +88,12 @@ interface PeerConnEntry {
   pc: RTCPeerConnection;
   connectionId: string;
   channel: RTCDataChannel | null;
+  /** Fecha a conexão se ela continuar "disconnected" (sem se recuperar) por DISCONNECTED_GRACE_MS. */
+  disconnectTimer: NodeJS.Timeout | null;
 }
+
+/** Quanto uma conexão pode ficar "disconnected" (queda de rede momentânea) antes de ser fechada. */
+const DISCONNECTED_GRACE_MS = 30_000;
 
 /** Endereço de rede de um peer visto no handshake WebRTC (só leitura; não é usado pelo protocolo). */
 export interface PeerNetworkInfo {
@@ -196,11 +201,43 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     }
   }
 
+  /**
+   * Fecha a conexão P2P de um peer que SAIU (ou cuja conexão falhou) e esquece a última mensagem dele.
+   *
+   * Sem isso, cada jogador que entrava e saía deixava uma RTCPeerConnection do werift VIVA para sempre (consentimento
+   * ICE, retransmissões DTLS/SCTP e os eventos internos rodando): numa sala com muita rotatividade a CPU crescia sem
+   * parar até 100% — ping alto, jogadores "voando", conexão com o bonk.io caindo (perfil da sala da IA, 25/09/2026:
+   * o sistema de eventos do werift no topo). A última mensagem do peer também deixava de ser repassada a quem entrava.
+   */
+  closePeer(src: string): void {
+    const entry = this.connections.get(src);
+    if (entry) {
+      this.connections.delete(src);
+      this.closeEntry(entry);
+    }
+    this.lastMessage.delete(src);
+  }
+
+  /** Quantas conexões P2P estão abertas (diagnóstico / testes). */
+  get peerCount(): number {
+    return this.connections.size;
+  }
+
+  private closeEntry(entry: PeerConnEntry): void {
+    if (entry.disconnectTimer) clearTimeout(entry.disconnectTimer);
+    entry.disconnectTimer = null;
+    try {
+      void entry.pc.close();
+    } catch (err) {
+      this.logger.debug({ err: (err as Error).message }, '[peer-broker] erro fechando conexão');
+    }
+  }
+
   disconnect(): void {
     this.closed = true;
     this.stopHeartbeat();
-    for (const { pc } of this.connections.values()) {
-      pc.close();
+    for (const entry of this.connections.values()) {
+      this.closeEntry(entry);
     }
     this.connections.clear();
     this.lastMessage.clear();
@@ -263,13 +300,35 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
     }
     const existing = this.connections.get(src);
     if (existing) {
-      existing.pc.close();
       this.connections.delete(src);
+      this.closeEntry(existing);
     }
 
     const pc = new RTCPeerConnection();
-    const entry: PeerConnEntry = { pc, connectionId: payload.connectionId, channel: null };
+    const entry: PeerConnEntry = { pc, connectionId: payload.connectionId, channel: null, disconnectTimer: null };
     this.connections.set(src, entry);
+
+    // Conexão que falhou/fechou do outro lado (ou que caiu e não voltou) é fechada daqui também. Só mexe na conexão se
+    // ela ainda for a ATUAL deste peer (um OFFER novo pode já ter trocado a entrada).
+    try {
+      pc.connectionStateChange?.subscribe((state) => {
+        if (this.connections.get(src) !== entry) return;
+        if (state === 'failed' || state === 'closed') {
+          this.logger.debug({ src, state }, '[peer-broker] conexão encerrada; liberando');
+          this.closePeer(src);
+        } else if (state === 'disconnected') {
+          entry.disconnectTimer ??= setTimeout(() => {
+            if (this.connections.get(src) === entry && pc.connectionState === 'disconnected') this.closePeer(src);
+          }, DISCONNECTED_GRACE_MS);
+          entry.disconnectTimer.unref?.();
+        } else if (entry.disconnectTimer) {
+          clearTimeout(entry.disconnectTimer);
+          entry.disconnectTimer = null;
+        }
+      });
+    } catch (err) {
+      this.logger.debug({ src, err: (err as Error).message }, '[peer-broker] não foi possível acompanhar o estado da conexão');
+    }
 
     // Só observação (moderação): NUNCA pode atrapalhar o handshake, então qualquer falha aqui é engolida.
     try {
@@ -350,8 +409,7 @@ export class PeerBrokerClient extends EventEmitter<PeerBrokerClientEvents> {
       });
     } catch (err) {
       this.logger.warn({ src, err: (err as Error).message }, '[peer-broker] falha respondendo OFFER');
-      pc.close();
-      this.connections.delete(src);
+      if (this.connections.get(src) === entry) this.closePeer(src);
     }
   }
 
