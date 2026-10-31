@@ -549,6 +549,19 @@ EventEmitter3 tem tipagem genérica por evento (`EventEmitter<Events>`), o que p
 
 ---
 
+## Testes
+
+A suíte roda com Vitest e cobre o núcleo que não depende de rede:
+
+- codificação/decodificação das mensagens do protocolo;
+- normalização de estado da sala (roster, times, placar);
+- máquina de reconexão e backoff.
+
+```bash
+pnpm test        # roda uma vez
+pnpm dev         # modo watch
+```
+
 ## Contribuindo
 
 Veja [CONTRIBUTING.md](./CONTRIBUTING.md).
